@@ -10,12 +10,8 @@ import types
 from collections import namedtuple
 from itertools import product
 
-import sage.all
 from anytree import PreOrderIter
-from sage.calculus.functional import diff
-from sage.calculus.var import function, var  # pylint: disable=no-name-in-module
-from sage.symbolic.operators import FDerivativeOperator
-from sage.symbolic.relation import solve
+from sympy.core.backend import symbols, Function, diff
 
 from .DerivativeOperators import FrechetD
 from .JanetBasis import Janet_Basis

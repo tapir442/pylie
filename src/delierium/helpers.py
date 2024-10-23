@@ -6,80 +6,43 @@ import re
 from functools import cache
 
 import more_itertools
-import sage.all  # type: ignore
-import sage.symbolic.operators  # type: ignore
-from anytree import Node, PreOrderIter, RenderTree  # type: ignore
 from IPython.core.debugger import set_trace  # type: ignore
 
-from sage.calculus.functional import diff  # type: ignore
-from sage.calculus.var import function, var  # type: ignore
-from sage.graphs.graph import Graph  # type: ignore
-from sage.symbolic.operators import FDerivativeOperator  # type: ignore
 from typing import Iterable, Tuple, Any, Generator, TypeAlias
 
+from sympy import *
+from sympy.core.relational import Equality
+from sympy.core.numbers import Integer, Rational, Zero, One, NegativeOne, Half
+from sympy import ordered, sympify
 
-sageexpression: TypeAlias = sage.symbolic.expression.Expression
+from sympy.core.backend import *
 
+from line_profiler import profile
+
+@profile
 def eq(d1, d2):
-    """This cheap trick gives as a lot of performance gain (> 80%!)
-    because maxima comparisons are expensive,and we can expect
-    a lot of the same comparisons over and over again.
-    All other caching is neglegible compared to this here
-    70 % of the time is spent here!
-    """
     if d1.__class__ != d2.__class__:
         return False
     return d1 == d2
 
 
+@profile
+def is_numeric(e):
+    return type(e) in (Integer, Rational, int, float, complex, Zero, One, NegativeOne, Half) \
+        and not type(e) == bool
+
+@profile
 def expr_eq(e1, e2):
-    """Substitute variables by random numbers an compare output."""
-    try:
-        l = e1.variables()
-    except AttributeError:
-        l = []
-    try:
-        l.extend(e2.variables())
-    except AttributeError:
-        pass
-    if not l:
-        return e1 == e2
-    substituted = False
-    rlist = [random.randint(100, 1_000) for i in range(len(l))]
-    r = dict(zip(l, rlist))
-    try:
-        ev1 = e1.subs(r)
-        substituted = True
-    except AttributeError:
-        ev1 = e1
-    try:
-        ev2 = e2.subs(r)
-        substituted = True
-    except AttributeError:
-        ev2 = e2
-    try:
-        # we can compare numbers
-        if substituted:
-            return ev1.n() == ev2.n()
-    except Exception:
-        return bool(ev1 == ev2)
+    res = e1 - e2 == 0
+    return res
 
+@profile
 def expr_is_zero(e):
-    try:
-        vars=e.variables()
-    except AttributeError:
-        return bool(e == 0)
-    rlist = [random.randint(100, 1_000) for i in range(len(vars))]
-    try:
-        ev = e.subs(dict(zip(vars, rlist)))
-    except AttributeError:
-        ev = e
-    # XXX make test twice
-    return bool(ev == 0)
+    return e == 0
 
 
 
-def pairs_exclude_diagonal(it: Iterable[Any]) -> Generator[Tuple[(Any, Any)], None, None]:
+def pairs_exclude_diagonal(it):
     for x, y in itertools.product(it, repeat=2):
         if x != y:
             yield (x, y)
@@ -130,30 +93,12 @@ def tangent_vector(f):
     return [d.coefficient(_) for _ in newvars]
 
 
-def order_of_derivative(e, required_len=0):
-    '''Returns the vector of the orders of a derivative respect to its variables
-
-    >>> x,y,z = var ("x,y,z")
-    >>> f = function("f")(x,y,z)
-    >>> d = diff(f, x,x,y,z,z,z)
-    >>> from delierium.helpers import order_of_derivative
-    >>> order_of_derivative (d)
-    [2, 1, 3]
-    '''
-    opr = e.operator()
-    opd = e.operands()
-    if not isinstance(opr, sage.symbolic.operators.FDerivativeOperator):
-        return [0] * max((len(e.variables()), required_len))
-    res = [opr.parameter_set().count(i) for i in range(len(opd))]
-    return res
-
-
 def is_derivative(e):
     """checks whether an expression 'e' is a pure derivative
 
     >>> from delierium.helpers import is_derivative
-    >>> x = var('x')
-    >>> f = function ('f')(x)
+    >>> x = symbols('x')
+    >>> f = Function('f')(x)
     >>> is_derivative (f)
     False
     >>> is_derivative (diff(f,x))
@@ -161,20 +106,14 @@ def is_derivative(e):
     >>> is_derivative (diff(f,x)*x)
     False
     """
-    try:
-        return isinstance(e.operator(), FDerivativeOperator)
-    except AttributeError:
-        return False
+    return e.is_Derivative
 
 
 def is_function(e) -> bool:
     """checks whether an expression 'e' is a pure function without any
     derivative as a factor
     """
-    if hasattr(e, "operator"):
-        return ("NewSymbolicFunction" in e.operator().__class__.__name__ and
-                e.operands() != [])
-    return False
+    return e.is_Function
 
 
 def compactify(*vars):
@@ -192,9 +131,16 @@ def compactify(*vars):
     return result
 
 
+@profile
+def _adiff(f, *vars):
+    return f.diff(*vars)
+
+@profile
 def adiff(f, context, *vars):
-    use_func_diff = any(
-        "NewSymbolicFunction" in v.__class__.__name__ for v in vars)
+    return _adiff(f, *tuple(vars))
+    return  f.diff(*vars)
+
+    use_func_diff = any(type(v) == Function for v in vars)
     for op in f.operands():
         if "NewSymbolicFunction" in op.operator().__class__.__name__:
             use_func_diff = True

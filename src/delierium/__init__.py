@@ -1,6 +1,6 @@
-from .matrix_order import Mlex, Mgrlex, Mgrevlex, Context
-from .helpers import tangent_vector, order_of_derivative, is_derivative, \
-    is_function, eq
-from .JanetBasis import _Dterm, _Differential_Polynomial, Autoreduce, \
-    Reorder, vec_multipliers, vec_degree, complete, CompleteSystem, Janet_Basis
-from .DerivativeOperators import FrechetD, EulerD
+from .DerivativeOperators import EulerD, FrechetD
+from .helpers import eq, is_derivative, is_function, tangent_vector
+from .JanetBasis import (LHDP, Autoreduce, CompleteSystem, Janet_Basis,
+                         Reorder, _Dterm, complete, vec_degree,
+                         vec_multipliers)
+from .matrix_order import Context, Mgrevlex, Mgrlex, Mlex

@@ -2,24 +2,19 @@ import delierium.matrix_order as M
 import delierium.JanetBasis as JB
 import functools
 
-from sage.all import *  # pylint: disable=wildcard-import, redefined-builtin, unused-wildcard-import
-from sage.calculus.var import function, var  # pylint: disable=W0611,E0611
+from sympy import *
 
-from sage.calculus.functional import diff
+
 from delierium.helpers import (is_derivative, is_function)
 from operator import mul
 
 
 def _generate_terms(expr):
-    if hasattr(expr.operator(), "__name__") and expr.operator().__name__ != 'add_vararg':
-        operands = [expr]
-    else:
-        operands = expr.operands()
-    return operands
+    return Add.make_args(expr)
 
 
 def analyze_expression(ctx, term):
-    operands = term.operands()
+    operands = Mul.make_args(term)
     coeffs = []
     d = []
     for operand in operands:
@@ -45,16 +40,15 @@ Dterm = JB._Dterm
 
 def test_simple():
     R = QQ["x", "y", "z"]  # pylint: disable=protected-access
-    x, y, z = R._first_ngens(3)  # pylint: disable=protected-access
-    f = function('f')
-    g = function('g')
-    h = function('h')
-
-    t = function('t')
+    x, y, z = symbols("x, y, z")
+    f = Function('f')
+    g = Function('g')
+    h = Function('h')
+    t = Function('t')
 
     ctx = M.Context([f, g, h], [x, y, z])
 
     expr = diff(Rational('-1/4') * f(x, y, z), x, x, y) - t(x, y, z) * Rational(9) * diff(h(x, y, z), z, 3)
     terms = _generate_terms(expr)
-    dterms = [Dterm(*(analyze_expression(ctx, _) +(ctx,))) for _ in terms]  # pylint: disable=protected-access
+    dterms = [Dterm(*(analyze_expression(ctx, _) +(ctx,))) for _ in terms]
     print(dterms)
