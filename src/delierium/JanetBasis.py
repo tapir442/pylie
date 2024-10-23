@@ -3,7 +3,7 @@ Janet Basis
 """
 
 import functools
-from collections import namedtuple
+from collections import namedtuple, OrderedDict
 from collections.abc import Iterable
 from dataclasses import dataclass
 from itertools import islice, product, groupby
@@ -107,6 +107,7 @@ class _Dterm(SageObject):
 
     @profile
     def __bool__(self):
+        # ToDo, lets think about that again, may be too slow
         return not self.is_zero()
 
     @profile
@@ -177,6 +178,23 @@ class _Dterm(SageObject):
     def add_coefficient(self, c):
         pass
 
+    def diff(self, *variables):
+        f = self.coeff
+        g = self.derivative
+        fprime = adiff(f, self.context, *variables)
+        gprime = adiff(g, self.context, *variables)
+        result = []
+        d1 = _Dterm(coeff=fprime,
+                    derivative=g,
+                    context=self.context)
+        if d1:
+            result.append(d1)
+        d2 = _Dterm(coeff=f,
+                    derivative=gprime,
+                    context=self.context)
+        if d2:
+            result.append(d2)
+        return result
 
     @profile
     def __hash__(self):
@@ -348,7 +366,17 @@ class _Differential_Polynomial(SageObject):
     _latex_ = latex
 
     def diff(self, *args):
-        return type(self)(diff(self.expression(), *args), self.context)
+        new_dterms = {}
+        for dterm in self.p:
+            _dterms = dterm.diff(*args)
+            for new_dterm in _dterms:
+                if new_dterm.comparison_vector in new_dterms:
+                    new_dterms[new_dterm.comparison_vector].coeff += new_dterm.coeff
+                else:
+                    new_dterms[new_dterm.comparison_vector] = new_dterm
+        print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+        print(f"{new_dterms=}")
+        return self.__class__(e=0, dterms=[*new_dterms.values()], context=self.context)
 
     def __str__(self):
         m = [self.context.independent[_] for _ in self.multipliers]
@@ -402,92 +430,63 @@ def _order(der, context):
     return [0] * len(context.independent)
 
 
-def collapse_dterms(dterms):
-    result = []
-    for _, value in groupby(dterms, key=lambda x: x.comparison_vector):
-        dts = list(value)
-        if len(dts) == 1:
-            result.append(dts[0])
-        else:
-            s = sum(_.coeff for _ in dts)
-            if s.is_numeric() and s.n() == 0:
-                continue
-            result.append(_Dterm(coeff=sum(_.coeff for _ in dts),
-                                 derivative=dts[0].derivative,
-                                 context=dts[0].derivative))
-    return result
-
-
-
 def _reduce_inner(e1, e2, context):
     for t in (_ for _ in e1.p if _.function == e2.function):
         c = t.coeff
         dif = [a - b for a, b in zip(t.order, e2.order)]
         if all(map(lambda h: h == 0, dif)):
             # S2 from Algorithm 2.4
+            changed2 = OrderedDict([(_.comparison_vector, _) for _ in e1.p])
             subs = []
-            changed = e1.p
             for p2 in e2.p:
                 pc = p2.coeff * c
-                hits = [_ for _ in e1.p if _.comparison_vector == p2.comparison_vector]
-                if hits:
-                    if not expr_eq(hits[0].coeff, pc):
-                        hits[0].coeff -= pc
+                hit = changed2.get(p2.comparison_vector, None)
+                if hit:
+                    if not expr_eq(hit.coeff, pc):
+                        hit.coeff -= pc
                     else:
-                        changed.remove(hits[0])
+                        del changed2[hit.comparison_vector]
                 else:
                     dt = _Dterm(coeff=-pc, derivative=p2.derivative, context=e1.context)
                     if dt:
+                        # XXX don't need subs, add to changed dict!
+                        # but think twice before!
+                        # subs.append(dt)
                         subs.append(dt)
-            dterms = collapse_dterms(changed + subs)
+#                        changed2[dt.comparison_vector] = dt
+            dterms = [*changed2.values()] + subs
             return _Differential_Polynomial(e=0, context=e2.context, dterms=dterms)
 
         elif all(map(lambda h: h >= 0, dif)):
-            variables_to_diff = []
-            for i in range(len(context.independent)):
-                if dif[i] != 0:
-                    variables_to_diff.extend([context.independent[i]] * abs(dif[i]))
+            variables_to_diff = get_diff_vars(context, dif)
+            changed = OrderedDict([(_.comparison_vector, _) for _ in e1.p])
             subs = []
-            changed = e1.p
             for p2 in e2.p:
-                # product rule
-                f = p2.coeff
-                gstrich = diff(p2.derivative, *variables_to_diff)
-                fstrich = diff(p2.coeff, *variables_to_diff)
-                g = p2.derivative
-                # f*g'
-                order = compute_order(gstrich, e1.context.independent, e1.context.order_of_derivative)
-                cmpvec = compute_comparison_vector(e1.context.dependent, p2.function, p2.context.is_ctxfunc)
-                hits = [_ for _ in e1.p if _.comparison_vector == tuple(order + cmpvec)]
-                pc = p2.coeff * c
-                if hits:
-                    if not expr_eq(hits[0].coeff, pc):
-                        hits[0].coeff -= pc
+                dterms = p2.diff(variables_to_diff)
+                for dterm in dterms:
+                    hit = changed.get(dterm.comparison_vector, None)
+                    pc = dterm.coeff * c
+                    if hit:
+                        if not expr_eq(hit.coeff, pc):
+                            hit.coeff -= pc
+                        else:
+                            del changed[hit.comparison_vector]
                     else:
-                        changed.remove(hits[0])
-                else:
-                    dt = _Dterm(coeff=-f * c, derivative=gstrich, context=p2.context)
-                    if dt:
-                        subs.append(dt)
-                # f'*g
-                order = compute_order(fstrich, e1.context.independent, e1.context.order_of_derivative)
-                cmpvec = list(p2.comparison_vector)
-                hits = [_ for _ in e1.p if _.comparison_vector == tuple(cmpvec)]
-                if hits:
-                    prod = c * fstrich
-                    if not expr_eq(hits[0].coeff, prod):
-                        hits[0].coeff -= prod
-                    else:
-                        changed.remove(hits[0])
-                else:
-                    dt = _Dterm(coeff=-c * fstrich, derivative=g, context=e1.context)
-                    if dt:
-                        subs.append(dt)
-            dterms = collapse_dterms(changed + subs)
+                        subs.append(_Dterm(coeff=-dterm.coeff,
+                                           derivative=dterm.derivative,
+                                           context=dterm.context))
+            dterms = [*changed.values()] + subs
             return _Differential_Polynomial(e=0, context=e2.context, dterms=dterms)
         else:
             pass
     return e1
+
+def get_diff_vars(context, dif):
+    variables = []
+    for i in range(len(context.independent)):
+        if dif[i] != 0:
+            variables.extend([context.independent[i]] * abs(dif[i]))
+    return variables
 
 
 def reduce(e1: _Differential_Polynomial, e2: _Differential_Polynomial, context: Context) -> _Differential_Polynomial:
@@ -759,11 +758,17 @@ def FindIntegrableConditions(S, context):
                     # integrability condition
                     # don't need leading coefficients because in DPs
                     # it is always 1
-                    c = adiff(e1[0].expression(), context, n) - \
-                        adiff(e2[0].expression(), context, *m)
-#                    print(f"{c=}")
-                    if c:
-                        result.append(c)
+                    d1 = e1[0].diff(n)
+                    d2 = e2[0].diff(*m)
+                    rrr = []
+                    first = dict([(_.comparison_vector, _) for _ in d1.p])
+                    for s in d2.p:
+                        if s.comparison_vector in first:
+                            first[s.comparison_vector].coeff += s.coeff
+                        else:
+                            rrr.append(s)
+                    return _Differential_Polynomial(e=0, context=context,
+                                                    dterms=rrr + [*first.values()])
     return result
 
 
@@ -850,23 +855,23 @@ class Janet_Basis:
                 # no change since last run
                 return
             old = self.S[:]
-#            print("This is where we start")
-#            self.show(rich=False, short=False)
+            print("This is where we start")
+            self.show(rich=False, short=False)
 
             self.S = Autoreduce(self.S, context)
-#            print("after autoreduce")
-#            self.show(rich=False, short=True)
+            print("after autoreduce")
+            self.show(rich=False, short=True)
             self.S = CompleteSystem(self.S, context)
-#            print("after complete system")
-#            self.show(rich=False, short=True)
+            print("after complete system")
+            self.show(rich=False, short=True)
 
             conditions = list(split_by_function(self.S, context))
-#            print("after conditions")
-#            print(conditions)
+            print("after conditions")
+            print(conditions)
 #            import pdb; pdb.set_trace()
-            reduced = [reduceS(_Differential_Polynomial(_m, context), self.S, context) for _m in conditions]
+            reduced = [reduceS(_m, self.S, context) for _m in conditions]
             reduced = [_ for _ in reduced if _]
-#            print("after reduced", reduced)
+            print("after reduced", reduced)
             if not reduced:
                 self.S = Reorder(self.S, context)
                 return
