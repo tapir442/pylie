@@ -1,3 +1,4 @@
+
 """
 Janet Basis
 """
@@ -374,8 +375,6 @@ class _Differential_Polynomial(SageObject):
                     new_dterms[new_dterm.comparison_vector].coeff += new_dterm.coeff
                 else:
                     new_dterms[new_dterm.comparison_vector] = new_dterm
-        print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
-        print(f"{new_dterms=}")
         return self.__class__(e=0, dterms=[*new_dterms.values()], context=self.context)
 
     def __str__(self):
@@ -764,11 +763,12 @@ def FindIntegrableConditions(S, context):
                     first = dict([(_.comparison_vector, _) for _ in d1.p])
                     for s in d2.p:
                         if s.comparison_vector in first:
-                            first[s.comparison_vector].coeff += s.coeff
+                            first[s.comparison_vector].coeff -= s.coeff
                         else:
                             rrr.append(s)
-                    return _Differential_Polynomial(e=0, context=context,
-                                                    dterms=rrr + [*first.values()])
+                    dterms = [_ for _ in rrr + [*first.values()] if _]
+                    result.append(_Differential_Polynomial(e=0, context=context,
+                                                    dterms=dterms))
     return result
 
 
@@ -864,7 +864,6 @@ class Janet_Basis:
             self.S = CompleteSystem(self.S, context)
             print("after complete system")
             self.show(rich=False, short=True)
-
             conditions = list(split_by_function(self.S, context))
             print("after conditions")
             print(conditions)
