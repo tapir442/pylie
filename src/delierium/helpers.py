@@ -20,6 +20,9 @@ from typing import Iterable, Tuple, Any, Generator, TypeAlias
 
 sageexpression: TypeAlias = sage.symbolic.expression.Expression
 
+from line_profiler import profile
+
+@profile
 def eq(d1, d2):
     """This cheap trick gives as a lot of performance gain (> 80%!)
     because maxima comparisons are expensive,and we can expect
@@ -32,21 +35,34 @@ def eq(d1, d2):
     return d1 == d2
 
 
+@profile
+def is_numeric(e):
+    return isinstance(e, (int, float, complex)) and not isinstance(e, bool)
+
+
+@cache
+@profile
 def expr_eq(e1, e2):
     """Substitute variables by random numbers an compare output."""
-    try:
-        l = e1.variables()
-    except AttributeError:
-        l = []
-    try:
-        l.extend(e2.variables())
-    except AttributeError:
-        pass
-    if not l:
-        return e1 == e2
+    if is_numeric(e1):
+        if is_numeric(e2):
+            return e1 == e2
+        else:
+            return False
+    else:
+        if is_numeric(e2):
+            return False
+    l1 = e1.variables()
+    l2 = e2.variables()
+    if l1 != l2:
+        return False
+    l = list(set(l1+l2))
     substituted = False
-    rlist = [random.randint(100, 1_000) for i in range(len(l))]
+    rlist = [random.uniform(1,2) for i in range(len(l))]
     r = dict(zip(l, rlist))
+    print(f"{e1=}")
+    print(f"{e2=}")
+    print(f"{locals()=}")
     try:
         ev1 = e1.subs(r)
         substituted = True
@@ -64,7 +80,15 @@ def expr_eq(e1, e2):
     except Exception:
         return bool(ev1 == ev2)
 
+@profile
 def expr_is_zero(e):
+    try:
+        if e.is_numeric():
+            return e == 0
+    except AttributeError:
+        return e == 0
+    return False
+
     try:
         vars=e.variables()
     except AttributeError:
@@ -192,6 +216,7 @@ def compactify(*vars):
     return result
 
 
+@profile
 def adiff(f, context, *vars):
     use_func_diff = any(
         "NewSymbolicFunction" in v.__class__.__name__ for v in vars)

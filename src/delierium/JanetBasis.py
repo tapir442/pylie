@@ -4,10 +4,10 @@ Janet Basis
 """
 
 import functools
-from collections import namedtuple, OrderedDict
+from collections import OrderedDict, namedtuple
 from collections.abc import Iterable
 from dataclasses import dataclass
-from itertools import islice, product, groupby
+from itertools import groupby, islice
 from operator import mul
 
 import sage.all
@@ -15,22 +15,24 @@ from IPython.core.debugger import set_trace
 from IPython.display import Math
 from more_itertools import bucket, flatten, powerset
 from sage.calculus.functional import diff
-from sage.calculus.var import (function,  # pylint: disable=no-name-in-module
-                               var)
+from sage.calculus.var import function  # pylint: disable=no-name-in-module
+from sage.calculus.var import var
 from sage.structure.sage_object import \
     SageObject  # pylint: disable=no-name-in-module
 
 from delierium.exception import DelieriumNotALinearPDE
 from delierium.helpers import (adiff, eq, expr_eq, expr_is_zero, is_derivative,
-                               is_function, pairs_exclude_diagonal)
+                               is_function, pairs_exclude_diagonal, is_numeric)
 from delierium.Involution import My_Multiplier
 from delierium.matrix_order import Context, Mgrevlex, Mgrlex
 from delierium.typedefs import *
 
 Sage_Expression = sage.symbolic.expression.Expression
 
-from line_profiler import profile
+from collections.abc import Callable, Iterator
+from typing import ClassVar, Optional, Union
 
+from line_profiler import profile
 
 try:
     __IPYTHON__
@@ -84,7 +86,7 @@ class _Dterm(SageObject):
 
     def __str__(self):
         try:
-            return f"({self.coeff.expression()}) * {self.derivative}"
+            return f"({self.coeff} * {self.derivative}"
         except AttributeError:
             if self.coeff == 1:
                 return f"{self.derivative}"
@@ -179,17 +181,26 @@ class _Dterm(SageObject):
     def add_coefficient(self, c):
         pass
 
+    @profile
     def diff(self, *variables):
         f = self.coeff
         g = self.derivative
-        fprime = adiff(f, self.context, *variables)
-        gprime = adiff(g, self.context, *variables)
+        print(f"{f=}, {g=}, {variables=}")
+        try:
+            fprime = adiff(f, self.context, *variables)
+        except AttributeError:
+            fprime = 0
+        print(f"{fprime=}")
         result = []
-        d1 = _Dterm(coeff=fprime,
-                    derivative=g,
-                    context=self.context)
-        if d1:
-            result.append(d1)
+        if not is_numeric(fprime) or (is_numeric(fprime) and fprime !=0):
+            print("EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE")
+            d1 = _Dterm(coeff=fprime,
+                        derivative=g,
+                        context=self.context)
+            print(f"{d1=}")
+            result = [d1]
+        gprime = adiff(g, self.context, *variables)
+        print(f"{gprime=}")
         d2 = _Dterm(coeff=f,
                     derivative=gprime,
                     context=self.context)
@@ -247,6 +258,7 @@ class _Differential_Polynomial(SageObject):
         coeffs = functools.reduce(mul, coeffs, 1)
         return str(d[0]), d[0], coeffs
 
+    @profile
     def _init(self, e):
         operands = []
         o = e.operator()
@@ -305,9 +317,11 @@ class _Differential_Polynomial(SageObject):
 
     @profile
     def normalize(self):
-        if self.p and self.p[0].coeff != 1:
-            c = self.p[0].coeff
-            self.p = [_Dterm(_.coeff / c, _.derivative, self.context) for _ in self.p if not _.is_zero()]
+        if self.p:
+            if not is_numeric(self.Lcoeff()) or \
+               (is_numeric(self.Lcoeff()) and self.Lcoeff != 1):
+                c = self.Lcoeff()
+                self.p = [_Dterm(_.coeff / c, _.derivative, self.context) for _ in self.p if not _.is_zero()]
         # XXX: wrong place?
         if self.p:
             self.order = self.p[0].order
@@ -366,9 +380,11 @@ class _Differential_Polynomial(SageObject):
 
     _latex_ = latex
 
+    @profile
     def diff(self, *args):
         new_dterms = {}
         for dterm in self.p:
+            print(f"{dterm=}, {args=}")
             _dterms = dterm.diff(*args)
             for new_dterm in _dterms:
                 if new_dterm.comparison_vector in new_dterms:
@@ -433,18 +449,19 @@ def _reduce_inner(e1, e2, context):
     for t in (_ for _ in e1.p if _.function == e2.function):
         c = t.coeff
         dif = [a - b for a, b in zip(t.order, e2.order)]
+        changed = OrderedDict([(_.comparison_vector, _) for _ in e1.p])
+        subs = []
         if all(map(lambda h: h == 0, dif)):
+            print("B"*22)
             # S2 from Algorithm 2.4
-            changed2 = OrderedDict([(_.comparison_vector, _) for _ in e1.p])
-            subs = []
             for p2 in e2.p:
                 pc = p2.coeff * c
-                hit = changed2.get(p2.comparison_vector, None)
+                hit = changed.get(p2.comparison_vector, None)
                 if hit:
                     if not expr_eq(hit.coeff, pc):
                         hit.coeff -= pc
                     else:
-                        del changed2[hit.comparison_vector]
+                        del changed[hit.comparison_vector]
                 else:
                     dt = _Dterm(coeff=-pc, derivative=p2.derivative, context=e1.context)
                     if dt:
@@ -453,10 +470,9 @@ def _reduce_inner(e1, e2, context):
                         # subs.append(dt)
                         subs.append(dt)
 #                        changed2[dt.comparison_vector] = dt
-            dterms = [*changed2.values()] + subs
-            return _Differential_Polynomial(e=0, context=e2.context, dterms=dterms)
 
         elif all(map(lambda h: h >= 0, dif)):
+            print("B"*22)
             variables_to_diff = get_diff_vars(context, dif)
             changed = OrderedDict([(_.comparison_vector, _) for _ in e1.p])
             subs = []
@@ -474,10 +490,14 @@ def _reduce_inner(e1, e2, context):
                         subs.append(_Dterm(coeff=-dterm.coeff,
                                            derivative=dterm.derivative,
                                            context=dterm.context))
-            dterms = [*changed.values()] + subs
-            return _Differential_Polynomial(e=0, context=e2.context, dterms=dterms)
         else:
             pass
+        dterms = [_ for _ in [*changed.values()] + subs if _]
+        for _ in dterms:
+            print(f"{_=}")
+        if dterms:
+            return _Differential_Polynomial(e=0, context=e2.context, dterms=dterms)
+
     return e1
 
 def get_diff_vars(context, dif):
@@ -606,11 +626,13 @@ def complete(S, context):
         return result
     vars = list(range(len(context.independent)))
 
+
     def map_old_to_new(v):
-        return context.independent[vars.index(v)]
+        return context.independent[vars.index(len(vars)-1-v)]
+#        return context.independent[vars.index(v)]
 
     while 1:
-        monomials = [(_, _.order) for _ in result]
+        monomials = [(_,list(reversed(_.order))) for _ in result]
         ms = tuple([_[1] for _ in monomials])
         m0 = []
 
@@ -710,7 +732,11 @@ def CompleteSystem(S, context):
 
 def split_by_function(S, context):
     s = bucket(S, key=lambda d: d.Lfunc())
-    return flatten([FindIntegrableConditions(s[k], context) for k in s])
+    murksi=[FindIntegrableConditions(s[k], context) for k in s]
+    print("CCCCCCCCCCCCCCCCCCCCCCCCCCC")
+    print(murksi)
+    return flatten(murksi)
+#    return flatten([FindIntegrableConditions(s[k], context) for k in s])
 
 @profile
 def FindIntegrableConditions(S, context):
@@ -730,7 +756,6 @@ def FindIntegrableConditions(S, context):
         # this is the crucial part of all af this algorithm: Think about it again
         return context.independent[vars.index(len(vars)-1-i)]
 
-
     # multiplier-collection is our M
     multiplier_collection = []
     for dp, monom in monomials:
@@ -740,19 +765,24 @@ def FindIntegrableConditions(S, context):
 #        print(f"=======================> {dp.Lder()=}, {_multipliers=}, {[map_old_to_new(_) for _ in _multipliers]=}, {_nonmultipliers=}, {[map_old_to_new(_) for _ in _nonmultipliers]=}")
         multiplier_collection.append(
             (dp, [map_old_to_new(_) for _ in _multipliers], [map_old_to_new(_) for _ in _nonmultipliers]))
+
+
     result = []
- #   print("."*80)
- #   print(locals())
+    print("."*80)
+    print(locals())
 #    import pdb; pdb.set_trace()
-    for e1, e2 in product(multiplier_collection, repeat=2):
-        if e1 == e2: continue
+    for e1, e2 in pairs_exclude_diagonal(multiplier_collection):
+        print("DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD")
+        print(f"{e1=}")
+        print(f"{e2=}")
         for n in e1[2]:
+            a1 = adiff(e1[0].Lder(), context, n)
             for m in islice(powerset(e2[1]), 1, None):
-                a1 = adiff(e1[0].Lder(), context, n)
                 a2 = adiff(e2[0].Lder(), context, *m)
 #                print(f"{n=}, {m=}, {a1=}, {a2=}")
                 # compare parameter_sets for performance reasons as
                 # the functions are always the same
+                print(f"{a1=}, {a2=}")
                 if a1.operator().parameter_set() == a2.operator().parameter_set():
                     # integrability condition
                     # don't need leading coefficients because in DPs
@@ -769,6 +799,7 @@ def FindIntegrableConditions(S, context):
                     dterms = [_ for _ in rrr + [*first.values()] if _]
                     result.append(_Differential_Polynomial(e=0, context=context,
                                                     dterms=dterms))
+    print(f"{result=}")
     return result
 
 
@@ -856,7 +887,7 @@ class Janet_Basis:
                 return
             old = self.S[:]
             print("This is where we start")
-            self.show(rich=False, short=False)
+            self.show(rich=False, short=True)
 
             self.S = Autoreduce(self.S, context)
             print("after autoreduce")
