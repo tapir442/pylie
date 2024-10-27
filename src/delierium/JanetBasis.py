@@ -519,10 +519,6 @@ def Autoreduce(S, context):
             if rnew:
                 newdps.append(rnew)
         dps = Reorder(_p + [_ for _ in newdps if _ not in _p], context, ascending=True)
-#        print("..............................................")
- #       print("after reduceS")
-  #      for _ in dps:
-    #        print(_)
         if not have_reduced:
             i += 1
         else:
@@ -624,8 +620,8 @@ def complete(S, context):
 
 
     def map_old_to_new(v):
-        return context.independent[vars.index(len(vars)-1-v)]
-#        return context.independent[vars.index(v)]
+#        return context.independent[vars.index(len(vars)-1-v)]
+        return context.independent[vars.index(v)]
 
     while 1:
         monomials = [(_,list(reversed(_.order))) for _ in result]
@@ -633,6 +629,8 @@ def complete(S, context):
         m0 = []
 
         coll = namedtuple('coll', ['monom', 'dp', 'multipliers', 'nonmultipliers'])
+
+
 
         # multiplier-collection is our M
         multiplier_collection = []
@@ -668,7 +666,8 @@ def complete(S, context):
             return result
         else:
             for _m0 in m0:
-                dp = _Differential_Polynomial(_m0[2].diff(map_old_to_new(_m0[1])).expression(), context, dterms=[])
+#                import pdb; pdb.set_trace()
+                dp = _m0[2].diff(map_old_to_new(_m0[1]))
                 if dp not in result:
                     result.append(dp)
         result = Reorder(result, context, ascending=False)
