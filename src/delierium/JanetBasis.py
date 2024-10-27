@@ -446,7 +446,6 @@ def _reduce_inner(e1, e2, context):
         changed = OrderedDict([(_.comparison_vector, _) for _ in e1.p])
         subs = []
         if all(map(lambda h: h == 0, dif)):
-#            print("B"*22)
             # S2 from Algorithm 2.4
             for p2 in e2.p:
                 pc = p2.coeff * c
@@ -459,14 +458,9 @@ def _reduce_inner(e1, e2, context):
                 else:
                     dt = _Dterm(coeff=-pc, derivative=p2.derivative, context=e1.context)
                     if dt:
-                        # XXX don't need subs, add to changed dict!
-                        # but think twice before!
-                        # subs.append(dt)
                         subs.append(dt)
-#                        changed2[dt.comparison_vector] = dt
 
         elif all(map(lambda h: h >= 0, dif)):
-#            print("B"*22)
             variables_to_diff = get_diff_vars(context, dif)
             changed = OrderedDict([(_.comparison_vector, _) for _ in e1.p])
             subs = []
@@ -617,11 +611,8 @@ def complete(S, context):
     if len(result) == 1:
         return result
     vars = list(range(len(context.independent)))
-
-
-    def map_old_to_new(v):
-#        return context.independent[vars.index(len(vars)-1-v)]
-        return context.independent[vars.index(v)]
+    # return context.independent[vars.index(len(vars)-1-v)]
+    map_old_to_new = lambda v: context.independent[vars.index(v)]
 
     while 1:
         monomials = [(_,list(reversed(_.order))) for _ in result]
@@ -629,9 +620,6 @@ def complete(S, context):
         m0 = []
 
         coll = namedtuple('coll', ['monom', 'dp', 'multipliers', 'nonmultipliers'])
-
-
-
         # multiplier-collection is our M
         multiplier_collection = []
         for dp, monom in monomials:
@@ -747,43 +735,32 @@ def FindIntegrableConditions(S, context):
 
     ms = tuple([_[1] for _ in monomials])
 
-    def map_old_to_new(i):
         # this is the crucial part of all af this algorithm: Think about it again
-        return context.independent[vars.index(len(vars)-1-i)]
+    map_old_to_new = lambda i: context.independent[vars.index(len(vars)-1-i)]
 
+    coll = namedtuple('coll', ['monom', 'dp', 'multipliers', 'nonmultipliers'])
     # multiplier-collection is our M
     multiplier_collection = []
     for dp, monom in monomials:
         # S1
         # damned! Variables are messed up!
         _multipliers, _nonmultipliers = vec_multipliers(monom, ms, vars)
-#        print(f"=======================> {dp.Lder()=}, {_multipliers=}, {[map_old_to_new(_) for _ in _multipliers]=}, {_nonmultipliers=}, {[map_old_to_new(_) for _ in _nonmultipliers]=}")
         multiplier_collection.append(
-            (dp, [map_old_to_new(_) for _ in _multipliers], [map_old_to_new(_) for _ in _nonmultipliers]))
+            coll(monom, dp, [map_old_to_new(_) for _ in _multipliers], [map_old_to_new(_) for _ in _nonmultipliers]))
 
 
     result = []
-#    print("."*80)
-#    print(locals())
-#    import pdb; pdb.set_trace()
     for e1, e2 in pairs_exclude_diagonal(multiplier_collection):
-#        print("DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD")
-#        print(f"{e1=}")
-#        print(f"{e2=}")
-        for n in e1[2]:
-            a1 = adiff(e1[0].Lder(), context, n)
-            for m in islice(powerset(e2[1]), 1, None):
-                a2 = adiff(e2[0].Lder(), context, *m)
-#                print(f"{n=}, {m=}, {a1=}, {a2=}")
-                # compare parameter_sets for performance reasons as
-                # the functions are always the same
-#                print(f"{a1=}, {a2=}")
+        for n in e1.nonmultipliers:
+            a1 = adiff(e1.dp.Lder(), context, n)
+            for m in islice(powerset(e2.multipliers), 1, None):
+                a2 = adiff(e2.dp.Lder(), context, *m)
                 if a1 == a2:
                     # integrability condition
                     # don't need leading coefficients because in DPs
                     # it is always 1
-                    d1 = e1[0].diff(n)
-                    d2 = e2[0].diff(*m)
+                    d1 = e1.dp.diff(n)
+                    d2 = e2.dp.diff(*m)
                     rrr = []
                     first = dict([(_.comparison_vector, _) for _ in d1.p])
                     for s in d2.p:
