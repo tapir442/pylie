@@ -519,10 +519,10 @@ def Autoreduce(S, context):
             if rnew:
                 newdps.append(rnew)
         dps = Reorder(_p + [_ for _ in newdps if _ not in _p], context, ascending=True)
-        print("..............................................")
-        print("after reduceS")
-        for _ in dps:
-            print(_)
+#        print("..............................................")
+ #       print("after reduceS")
+  #      for _ in dps:
+    #        print(_)
         if not have_reduced:
             i += 1
         else:
