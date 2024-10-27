@@ -1,6 +1,5 @@
 """matrix_order"""
 
-import sage.all # pylint: disable=W0611
 from sage.matrix.constructor import identity_matrix  # pylint: disable=E0611
 from sage.matrix.constructor import matrix  # pylint: disable=E0611
 from sage.calculus.var import var  # pylint: disable=W0611,E0611
@@ -11,6 +10,11 @@ from sage.modules.free_module_element import vector  # pylint: disable=E0611
 from delierium.helpers import is_derivative, is_function
 
 from functools import cache
+
+from sympy import Matrix
+from sympy import Function
+from sympy import symbols
+
 
 #
 # standard weight matrices for lex, grlex and grevlex order
@@ -35,18 +39,18 @@ def Mlex(funcs, variables):  # pylint: disable=C0103
 
             same applies mutatis mutandis for Mgrlex and Mgrevlex
 
-    >>> x,y,z = var ("x y z")
-    >>> f = function("f")(x,y,z)
-    >>> g = function("g")(x,y,z)
-    >>> h = function("h")(x,y,z)
+    >>> x,y,z = symbols("x y z")
+    >>> f = Function("f")(x,y,z)
+    >>> g = Function("g")(x,y,z)
+    >>> h = Function("h")(x,y,z)
     >>> Mlex ((f,g), [x,y,z])
     [0 0 0 2 1]
     [1 0 0 0 0]
     [0 1 0 0 0]
     [0 0 1 0 0]
-    >>> x,y = var ("x y")
-    >>> w = function("w")(x,y)
-    >>> z = function("z")(x,y)
+    >>> x,y = symbols("x y")
+    >>> w = Function("w")(x,y)
+    >>> z = Function("z")(x,y)
     >>> Mlex((z,w), (x,y))
     [0 0 2 1]
     [1 0 0 0]
@@ -63,11 +67,11 @@ def Mlex(funcs, variables):  # pylint: disable=C0103
 
 def Mgrlex(funcs, variables):  # pylint: disable=C0103
     '''Generates the "cotes" according to Riquier for the grlex ordering
-    >>> x,y,z = var ("x y z")
-    >>> f = function("f")(x,y,z)
-    >>> g = function("g")(x,y,z)
-    >>> h = function("h")(x,y,z)
-    >>> Mgrlex ((f,g,h), [x,y,z])
+    >>> x,y,z = symbols("x y z")
+    >>> f = Function("f")(x,y,z)
+    >>> g = Function("g")(x,y,z)
+    >>> h = Function("h")(x,y,z)
+    >>> Mgrlex((f,g,h), [x,y,z])
     [1 1 1 0 0 0]
     [0 0 0 3 2 1]
     [1 0 0 0 0 0]
@@ -81,10 +85,10 @@ def Mgrlex(funcs, variables):  # pylint: disable=C0103
 
 def Mgrevlex(funcs, variables):  # pylint: disable=C0103
     '''Generates the "cotes" according to Riquier for the grevlex ordering
-    >>> _ = var ("x y z")
-    >>> f = function("f")(*_)
-    >>> g = function("g")(*_)
-    >>> h = function("h")(*_)
+    >>> x, y, z = symbols("x y z")
+    >>> f = Function("f")(x, y, z)
+    >>> g = Function("g")(x, y, z)
+    >>> h = Function("h")(x, y, z)
     >>> Mgrevlex ((f,g,h), [x,y,z])
     [ 1  1  1  0  0  0]
     [ 0  0  0  3  2  1]
