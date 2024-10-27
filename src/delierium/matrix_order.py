@@ -1,11 +1,11 @@
 """matrix_order"""
 
-from sage.matrix.constructor import identity_matrix  # pylint: disable=E0611
-from sage.matrix.constructor import matrix  # pylint: disable=E0611
-from sage.calculus.var import var  # pylint: disable=W0611,E0611
-from sage.calculus.var import function  # pylint: disable=W0611,E0611
-from sage.calculus.functional import diff  # pylint: disable=W0611
-from sage.modules.free_module_element import vector  # pylint: disable=E0611
+#from sage.matrix.constructor import identity_matrix  # pylint: disable=E0611
+#from sage.matrix.constructor import matrix  # pylint: disable=E0611
+#from sage.calculus.var import var  # pylint: disable=W0611,E0611
+#from sage.calculus.var import function  # pylint: disable=W0611,E0611
+#from sage.calculus.functional import diff  # pylint: disable=W0611
+#from sage.modules.free_module_element import vector  # pylint: disable=E0611
 
 from delierium.helpers import is_derivative, is_function
 
@@ -13,8 +13,10 @@ from functools import cache
 
 from sympy import Matrix
 from sympy import Function
+from sympy import vector
 from sympy import symbols
-
+from sympy import eye, zeros
+from sympy.printing.pretty import pretty
 
 #
 # standard weight matrices for lex, grlex and grevlex order
@@ -24,7 +26,7 @@ from sympy import symbols
 
 def insert_row(mat, k, row):
     """Use this as insert_row is only defined for integer matrices :("""
-    return matrix(mat.rows()[:k]+[row] + mat.rows()[k:])
+    return Matrix(mat.rows()[:k]+[row] + mat.rows()[k:])
 
 
 def Mlex(funcs, variables):  # pylint: disable=C0103
@@ -43,25 +45,20 @@ def Mlex(funcs, variables):  # pylint: disable=C0103
     >>> f = Function("f")(x,y,z)
     >>> g = Function("g")(x,y,z)
     >>> h = Function("h")(x,y,z)
-    >>> Mlex ((f,g), [x,y,z])
-    [0 0 0 2 1]
-    [1 0 0 0 0]
-    [0 1 0 0 0]
-    [0 0 1 0 0]
+    >>> print(Mlex ((f,g), [x,y,z]))
+    Matrix([[0, 0, 0, 2, 1], [1, 0, 0, 0, 0], [0, 1, 0, 0, 0], [0, 0, 1, 0, 0]])
     >>> x,y = symbols("x y")
     >>> w = Function("w")(x,y)
     >>> z = Function("z")(x,y)
-    >>> Mlex((z,w), (x,y))
-    [0 0 2 1]
-    [1 0 0 0]
-    [0 1 0 0]
+    >>> print(Mlex((z,w), (x,y)))
+    Matrix([[0, 0, 2, 1], [1, 0, 0, 0], [0, 1, 0, 0]])
     '''
     no_funcs = len(funcs)
     no_vars = len(variables)
-    i = identity_matrix(no_vars)
-    i = insert_row(i, 0, [0]*no_vars)
+    i = eye(no_vars)
+    i = i.row_insert(0, Matrix(1, no_vars, [0]*no_vars))
     for j in range(no_funcs, 0, -1):
-        i = i.augment(vector([j] + [0]*no_vars))
+        i = i.row_join(Matrix([j] + [0]*no_vars))
     return i
 
 
@@ -71,15 +68,13 @@ def Mgrlex(funcs, variables):  # pylint: disable=C0103
     >>> f = Function("f")(x,y,z)
     >>> g = Function("g")(x,y,z)
     >>> h = Function("h")(x,y,z)
-    >>> Mgrlex((f,g,h), [x,y,z])
-    [1 1 1 0 0 0]
-    [0 0 0 3 2 1]
-    [1 0 0 0 0 0]
-    [0 1 0 0 0 0]
-    [0 0 1 0 0 0]
+    >>> print(Mgrlex((f,g,h), [x,y,z])) # doctest: +NORMALIZE_WHITESPACE
+    Matrix([[1, 1, 1, 0, 0, 0], [0, 0, 0, 3, 2, 1], [1, 0, 0, 0, 0, 0], \
+[0, 1, 0, 0, 0, 0], [0, 0, 1, 0, 0, 0]])
     '''
     m = Mlex(funcs, variables)
-    m = insert_row(m, 0, [1]*len(variables)+[0]*len(funcs))
+    first_row = Matrix(1, len(variables)+len(funcs), [1]*len(variables)+[0]*len(funcs))
+    m = m.row_insert(0, first_row)
     return m
 
 
@@ -89,21 +84,21 @@ def Mgrevlex(funcs, variables):  # pylint: disable=C0103
     >>> f = Function("f")(x, y, z)
     >>> g = Function("g")(x, y, z)
     >>> h = Function("h")(x, y, z)
-    >>> Mgrevlex ((f,g,h), [x,y,z])
-    [ 1  1  1  0  0  0]
-    [ 0  0  0  3  2  1]
-    [ 0  0 -1  0  0  0]
-    [ 0 -1  0  0  0  0]
-    [-1  0  0  0  0  0]
+    >>> print(Mgrevlex ((f,g,h), [x,y,z]))
+    Matrix([[1, 1, 1, 0, 0, 0], [0, 0, 0, 3, 2, 1], \
+[0, 0, -1, 0, 0, 0], [0, -1, 0, 0, 0, 0], [-1, 0, 0, 0, 0, 0]])
     '''
     no_funcs = len(funcs)
     no_vars = len(variables)
-    l = matrix([1]*no_vars + [0]*no_funcs)
-    l = insert_row(l, 1, vector([0]*no_vars + list(range(no_funcs, 0, -1))))
+    cols = no_funcs + no_vars
+    first_row = [1]*no_vars + [0]*no_funcs
+    l = Matrix(1, cols, first_row)
+    second_row = Matrix(1, cols, [0]*no_vars + list(range(no_funcs, 0, -1)))
+    l = l.row_insert(cols, second_row)
     for idx in range(no_vars):
-        _v = vector([0]*(no_vars+no_funcs))
+        _v = Matrix(1, cols, [0]*cols)
         _v[no_vars-idx-1] = -1
-        l = insert_row(l, 2+idx, _v)
+        l = l.row_insert(2+idx, _v)
     return l
 
 class Context:
@@ -113,15 +108,15 @@ class Context:
         which means: descending
         """
         self.independent = tuple(independent)
-        self.dependent = tuple(dependent)
+        self.dependent = tuple(_.func for _ in dependent)
         self._weight = weight(self.dependent, self.independent)
 
     @cache
-    def gt(self, v1: vector, v2: vector) -> int:
+    def gt(self, v1, v2) -> int:
         """Computes the weighted difference vector of v1 and v2
         and returns 'True' if the first nonzero entry is > 0
         """
-        r = self._weight * (vector(v1)-vector(v2))
+        r = self._weight @ (Matrix(v1)-Matrix(v2))
         for entry in r:
             if entry:
                 return entry > 0
@@ -136,7 +131,7 @@ class Context:
 
     @cache
     def is_ctxfunc(self, f):
-        """Check if 'f' is in the list of independet variables."""
+        """Check if 'f' is in the list of independnet variables."""
         if f in self.dependent:
             return True
         if hasattr(f, "function") and f.function().operator() in self.dependent:
@@ -154,7 +149,7 @@ class Context:
         >>> ctx.order_of_derivative (d)
         [2, 1, 3]
         """
-        res = [0] * len(e.variable_count)
+        res = [0] * len(e.args[0].args)
         if not is_derivative(e):
             return res
         for variable, count in e.variable_count:

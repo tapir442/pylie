@@ -34,6 +34,9 @@ from typing import ClassVar, Optional, Union
 
 from line_profiler import profile
 
+from sympy import *
+
+
 try:
     __IPYTHON__
     _in_ipython_session = True
@@ -70,9 +73,9 @@ class _Dterm(SageObject):
     def __post_init__(self):
         object.__setattr__(self, 'order', self._compute_order())
         if is_derivative(self.derivative):
-            object.__setattr__(self, 'function', self.derivative.operator().function())
+            object.__setattr__(self, 'function', self.derivative.args[0].func)
         else:
-            object.__setattr__(self, 'function', self.derivative.function().operator())
+            object.__setattr__(self, 'function', self.derivative.func)
         object.__setattr__(self, 'comparison_vector', self._compute_comparison_vector())
 
     @profile
@@ -116,9 +119,9 @@ class _Dterm(SageObject):
     @profile
     def __lt__(self, other):
         """
-        >>> x,y,z = var("x y z")
-        >>> g     = function("g")(x,y,z)
-        >>> h     = function("h")(x,y,z)
+        >>> x,y,z = symbols("x y z")
+        >>> g     = Function("g")(x,y,z)
+        >>> h     = Function("h")(x,y,z)
         >>> ctx   = Context ((f,g,h),(x,y,z), Mlex)
         >>> dterm1 = _Dterm(derivative=diff(f, x, y), coeff=x**2, context=ctx)
         >>> dterm2 = _Dterm(derivative=diff(f, x, y, z), coeff=1 , context=ctx)
@@ -226,29 +229,23 @@ class _Differential_Polynomial(SageObject):
         if dterms:
             self.p = dterms[:]
         else:
-            if hasattr(e, "operator") and e.operator():
-                self._init(e.expand())
-            else:
-                pass
+            self._init(e.expand())
         self.p.sort(reverse=True)
         self.normalize()
 
     @profile
     def _analyze(self, term):
-        if hasattr(term.operator(), "__name__") and term.operator().__name__ == 'mul_vararg':
-            operands = term.operands()
-        else:
-            operands = [term]
+        operands = term.as_ordered_factors()
         coeffs = []
         d = []
         for operand in operands:
             if is_function(operand):
-                if self.context.is_ctxfunc(operand):
+                if self.context.is_ctxfunc(operand.func):
                     d.append(operand)
                 else:
                     coeffs.append(operand)
             elif is_derivative(operand):
-                if self.context.is_ctxfunc(operand.operator().function()):
+                if self.context.is_ctxfunc(operand.args[0].func):
                     d.append(operand)
                 else:
                     coeffs.append(operand)
@@ -256,16 +253,12 @@ class _Differential_Polynomial(SageObject):
                 coeffs.append(operand)
 
         coeffs = functools.reduce(mul, coeffs, 1)
+        print(f"{locals()=}")
         return str(d[0]), d[0], coeffs
 
     @profile
     def _init(self, e):
-        operands = []
-        o = e.operator()
-        if hasattr(o, "__name__") and o.__name__ == 'add_vararg':
-            operands = e.operands()
-        else:
-            operands = [e]
+        operands = Add.make_args(e)
         r = [self._analyze(o) for o in operands]
         dterms = {}
         for _r in r:
