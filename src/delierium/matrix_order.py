@@ -113,8 +113,7 @@ class Context:
         which means: descending
         """
         self.independent = tuple(independent)
-        self.dependent = tuple((_.operator() if is_function(_) else _
-                                 for _ in dependent))
+        self.dependent = tuple(dependent)
         self._weight = weight(self.dependent, self.independent)
 
     @cache
@@ -148,24 +147,19 @@ class Context:
     def order_of_derivative(self, e):
         """Returns the vector of the orders of a derivative respect to its variables
 
-        >>> x,y,z = var ("x,y,z")
-        >>> f = function("f")(x,y,z)
+        >>> x,y,z = symbols("x,y,z")
+        >>> f = Function("f")(x,y,z)
         >>> ctx = Context([f], [x,y,z])
-        >>> d = diff(f, x,x,y,z,z,z)
+        >>> d = f.diff(x,x,y,z,z,z)
         >>> ctx.order_of_derivative (d)
         [2, 1, 3]
         """
-        res = [0] * len(e.variables())
+        res = [0] * len(e.variable_count)
         if not is_derivative(e):
             return res
-        for idx, variable in enumerate(e.variables()):
-            # XXX. here seems to be the crucial part: order can depend on:
-            # - either the order given by sage by
-            # -- sage order
-            # -- order given by the order given by function definition
-            # - the order given by context
+        for variable, count in e.variable_count:
             i = self.independent.index(variable)
-            res[i] = e.operator().parameter_set().count(idx)
+            res[i] = count
         return res
 
 

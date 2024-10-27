@@ -17,6 +17,7 @@ from sage.graphs.graph import Graph  # type: ignore
 from sage.symbolic.operators import FDerivativeOperator  # type: ignore
 from typing import Iterable, Tuple, Any, Generator, TypeAlias
 
+from sympy import *
 
 sageexpression: TypeAlias = sage.symbolic.expression.Expression
 
@@ -103,7 +104,7 @@ def expr_is_zero(e):
 
 
 
-def pairs_exclude_diagonal(it: Iterable[Any]) -> Generator[Tuple[(Any, Any)], None, None]:
+def pairs_exclude_diagonal(it):
     for x, y in itertools.product(it, repeat=2):
         if x != y:
             yield (x, y)
@@ -154,30 +155,12 @@ def tangent_vector(f):
     return [d.coefficient(_) for _ in newvars]
 
 
-def order_of_derivative(e, required_len=0):
-    '''Returns the vector of the orders of a derivative respect to its variables
-
-    >>> x,y,z = var ("x,y,z")
-    >>> f = function("f")(x,y,z)
-    >>> d = diff(f, x,x,y,z,z,z)
-    >>> from delierium.helpers import order_of_derivative
-    >>> order_of_derivative (d)
-    [2, 1, 3]
-    '''
-    opr = e.operator()
-    opd = e.operands()
-    if not isinstance(opr, sage.symbolic.operators.FDerivativeOperator):
-        return [0] * max((len(e.variables()), required_len))
-    res = [opr.parameter_set().count(i) for i in range(len(opd))]
-    return res
-
-
 def is_derivative(e):
     """checks whether an expression 'e' is a pure derivative
 
     >>> from delierium.helpers import is_derivative
-    >>> x = var('x')
-    >>> f = function ('f')(x)
+    >>> x = symbols('x')
+    >>> f = Function('f')(x)
     >>> is_derivative (f)
     False
     >>> is_derivative (diff(f,x))
@@ -185,20 +168,14 @@ def is_derivative(e):
     >>> is_derivative (diff(f,x)*x)
     False
     """
-    try:
-        return isinstance(e.operator(), FDerivativeOperator)
-    except AttributeError:
-        return False
+    return e.is_Derivative
 
 
 def is_function(e) -> bool:
     """checks whether an expression 'e' is a pure function without any
     derivative as a factor
     """
-    if hasattr(e, "operator"):
-        return ("NewSymbolicFunction" in e.operator().__class__.__name__ and
-                e.operands() != [])
-    return False
+    return e.is_Function
 
 
 def compactify(*vars):
