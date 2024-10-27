@@ -10,15 +10,15 @@ from dataclasses import dataclass
 from itertools import groupby, islice
 from operator import mul
 
-import sage.all
+#import sage.all
 from IPython.core.debugger import set_trace
 from IPython.display import Math
 from more_itertools import bucket, flatten, powerset
-from sage.calculus.functional import diff
-from sage.calculus.var import function  # pylint: disable=no-name-in-module
-from sage.calculus.var import var
-from sage.structure.sage_object import \
-    SageObject  # pylint: disable=no-name-in-module
+#from sage.calculus.functional import diff
+#from sage.calculus.var import function  # pylint: disable=no-name-in-module
+#from sage.calculus.var import var
+#from sage.structure.sage_object import \
+#    SageObject  # pylint: disable=no-name-in-module
 
 from delierium.exception import DelieriumNotALinearPDE
 from delierium.helpers import (adiff, eq, expr_eq, expr_is_zero, is_derivative,
@@ -27,7 +27,7 @@ from delierium.Involution import My_Multiplier
 from delierium.matrix_order import Context, Mgrevlex, Mgrlex
 from delierium.typedefs import *
 
-Sage_Expression = sage.symbolic.expression.Expression
+#Sage_Expression = sage.symbolic.expression.Expression
 
 from collections.abc import Callable, Iterator
 from typing import ClassVar, Optional, Union
@@ -49,7 +49,7 @@ def compute_comparison_vector(dependent, func, ctxcheck):
     if func in dependent:
         iv[dependent.index(func)] = 1
     elif ctxcheck(func):
-        iv[dependent.index(func.operator())] = 1
+        iv[dependent.index(func)] = 1
     else:
         pass
     return iv
@@ -64,7 +64,7 @@ def compute_order(derivative, independent, comp_order):
 
 
 @dataclass()
-class _Dterm(SageObject):
+class _Dterm:
     coeff: int
     derivative: int
     context: Context
@@ -88,12 +88,9 @@ class _Dterm(SageObject):
         return tuple(self.order + iv)
 
     def __str__(self):
-        try:
-            return f"({self.coeff} * {self.derivative}"
-        except AttributeError:
-            if self.coeff == 1:
-                return f"{self.derivative}"
-            return f"({self.coeff}) * { self.derivative}"
+        if self.coeff == 1:
+            return f"{self.derivative}"
+        return f"({self.coeff}) * { self.derivative}"
 
     def term(self):
         return self.coeff * self.derivative
@@ -105,6 +102,7 @@ class _Dterm(SageObject):
     @profile
     def is_zero(self):
         return expr_is_zero(self.coeff)
+
 
     def is_coefficient(self):
         # XXX nonsense
@@ -188,22 +186,22 @@ class _Dterm(SageObject):
     def diff(self, *variables):
         f = self.coeff
         g = self.derivative
-        print(f"{f=}, {g=}, {variables=}")
+#        print(f"{f=}, {g=}, {variables=}")
         try:
             fprime = adiff(f, self.context, *variables)
         except AttributeError:
             fprime = 0
-        print(f"{fprime=}")
+#        print(f"{fprime=}")
         result = []
         if not is_numeric(fprime) or (is_numeric(fprime) and fprime !=0):
-            print("EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE")
+#            print("EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE")
             d1 = _Dterm(coeff=fprime,
                         derivative=g,
                         context=self.context)
-            print(f"{d1=}")
+ #           print(f"{d1=}")
             result = [d1]
         gprime = adiff(g, self.context, *variables)
-        print(f"{gprime=}")
+ #       print(f"{gprime=}")
         d2 = _Dterm(coeff=f,
                     derivative=gprime,
                     context=self.context)
@@ -217,7 +215,7 @@ class _Dterm(SageObject):
 
     _cache_key = __hash__
 
-class _Differential_Polynomial(SageObject):
+class _Differential_Polynomial:
 
     @profile
     def __init__(self, e, context, dterms=[]):
@@ -253,7 +251,7 @@ class _Differential_Polynomial(SageObject):
                 coeffs.append(operand)
 
         coeffs = functools.reduce(mul, coeffs, 1)
-        print(f"{locals()=}")
+#        print(f"{locals()=}")
         return str(d[0]), d[0], coeffs
 
     @profile
@@ -312,7 +310,7 @@ class _Differential_Polynomial(SageObject):
     def normalize(self):
         if self.p:
             if not is_numeric(self.Lcoeff()) or \
-               (is_numeric(self.Lcoeff()) and self.Lcoeff != 1):
+               (is_numeric(self.Lcoeff()) and self.Lcoeff() != 1):
                 c = self.Lcoeff()
                 self.p = [_Dterm(_.coeff / c, _.derivative, self.context) for _ in self.p if not _.is_zero()]
         # XXX: wrong place?
@@ -377,7 +375,7 @@ class _Differential_Polynomial(SageObject):
     def diff(self, *args):
         new_dterms = {}
         for dterm in self.p:
-            print(f"{dterm=}, {args=}")
+#            print(f"{dterm=}, {args=}")
             _dterms = dterm.diff(*args)
             for new_dterm in _dterms:
                 if new_dterm.comparison_vector in new_dterms:
@@ -439,13 +437,16 @@ def _order(der, context):
 
 
 def _reduce_inner(e1, e2, context):
+#    print(f"{e1=}")
+#    print(f"{e2=}")
+#    import pdb; pdb.set_trace()
     for t in (_ for _ in e1.p if _.function == e2.function):
         c = t.coeff
         dif = [a - b for a, b in zip(t.order, e2.order)]
         changed = OrderedDict([(_.comparison_vector, _) for _ in e1.p])
         subs = []
         if all(map(lambda h: h == 0, dif)):
-            print("B"*22)
+#            print("B"*22)
             # S2 from Algorithm 2.4
             for p2 in e2.p:
                 pc = p2.coeff * c
@@ -465,12 +466,12 @@ def _reduce_inner(e1, e2, context):
 #                        changed2[dt.comparison_vector] = dt
 
         elif all(map(lambda h: h >= 0, dif)):
-            print("B"*22)
+#            print("B"*22)
             variables_to_diff = get_diff_vars(context, dif)
             changed = OrderedDict([(_.comparison_vector, _) for _ in e1.p])
             subs = []
             for p2 in e2.p:
-                dterms = p2.diff(variables_to_diff)
+                dterms = p2.diff(*variables_to_diff)
                 for dterm in dterms:
                     hit = changed.get(dterm.comparison_vector, None)
                     pc = dterm.coeff * c
@@ -486,8 +487,6 @@ def _reduce_inner(e1, e2, context):
         else:
             pass
         dterms = [_ for _ in [*changed.values()] + subs if _]
-        for _ in dterms:
-            print(f"{_=}")
         if dterms:
             return _Differential_Polynomial(e=0, context=e2.context, dterms=dterms)
 
@@ -520,6 +519,10 @@ def Autoreduce(S, context):
             if rnew:
                 newdps.append(rnew)
         dps = Reorder(_p + [_ for _ in newdps if _ not in _p], context, ascending=True)
+        print("..............................................")
+        print("after reduceS")
+        for _ in dps:
+            print(_)
         if not have_reduced:
             i += 1
         else:
@@ -726,8 +729,8 @@ def CompleteSystem(S, context):
 def split_by_function(S, context):
     s = bucket(S, key=lambda d: d.Lfunc())
     murksi=[FindIntegrableConditions(s[k], context) for k in s]
-    print("CCCCCCCCCCCCCCCCCCCCCCCCCCC")
-    print(murksi)
+#    print("CCCCCCCCCCCCCCCCCCCCCCCCCCC")
+#    print(murksi)
     return flatten(murksi)
 #    return flatten([FindIntegrableConditions(s[k], context) for k in s])
 
@@ -761,13 +764,13 @@ def FindIntegrableConditions(S, context):
 
 
     result = []
-    print("."*80)
-    print(locals())
+#    print("."*80)
+#    print(locals())
 #    import pdb; pdb.set_trace()
     for e1, e2 in pairs_exclude_diagonal(multiplier_collection):
-        print("DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD")
-        print(f"{e1=}")
-        print(f"{e2=}")
+#        print("DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD")
+#        print(f"{e1=}")
+#        print(f"{e2=}")
         for n in e1[2]:
             a1 = adiff(e1[0].Lder(), context, n)
             for m in islice(powerset(e2[1]), 1, None):
@@ -775,8 +778,8 @@ def FindIntegrableConditions(S, context):
 #                print(f"{n=}, {m=}, {a1=}, {a2=}")
                 # compare parameter_sets for performance reasons as
                 # the functions are always the same
-                print(f"{a1=}, {a2=}")
-                if a1.operator().parameter_set() == a2.operator().parameter_set():
+#                print(f"{a1=}, {a2=}")
+                if a1 == a2:
                     # integrability condition
                     # don't need leading coefficients because in DPs
                     # it is always 1
@@ -790,9 +793,10 @@ def FindIntegrableConditions(S, context):
                         else:
                             rrr.append(s)
                     dterms = [_ for _ in rrr + [*first.values()] if _]
-                    result.append(_Differential_Polynomial(e=0, context=context,
-                                                    dterms=dterms))
-    print(f"{result=}")
+                    if dterms:
+                        result.append(_Differential_Polynomial(e=0, context=context,
+                                                               dterms=dterms))
+#    print(f"{result=}")
     return result
 
 
@@ -879,22 +883,22 @@ class Janet_Basis:
                 # no change since last run
                 return
             old = self.S[:]
-            print("This is where we start")
-            self.show(rich=False, short=True)
+#            print("This is where we start")
+#            self.show(rich=False, short=True)
 
             self.S = Autoreduce(self.S, context)
             print("after autoreduce")
             self.show(rich=False, short=True)
             self.S = CompleteSystem(self.S, context)
-            print("after complete system")
-            self.show(rich=False, short=True)
+#            print("after complete system")
+#            self.show(rich=False, short=True)
             conditions = list(split_by_function(self.S, context))
-            print("after conditions")
-            print(conditions)
+#            print("after conditions")
+#            print(conditions)
 #            import pdb; pdb.set_trace()
             reduced = [reduceS(_m, self.S, context) for _m in conditions]
             reduced = [_ for _ in reduced if _]
-            print("after reduced", reduced)
+#            print("after reduced", reduced)
             if not reduced:
                 self.S = Reorder(self.S, context)
                 return

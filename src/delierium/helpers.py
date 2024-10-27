@@ -6,20 +6,20 @@ import re
 from functools import cache
 
 import more_itertools
-import sage.all  # type: ignore
-import sage.symbolic.operators  # type: ignore
+#import sage.all  # type: ignore
+#import sage.symbolic.operators  # type: ignore
 from anytree import Node, PreOrderIter, RenderTree  # type: ignore
 from IPython.core.debugger import set_trace  # type: ignore
 
-from sage.calculus.functional import diff  # type: ignore
-from sage.calculus.var import function, var  # type: ignore
-from sage.graphs.graph import Graph  # type: ignore
-from sage.symbolic.operators import FDerivativeOperator  # type: ignore
+#from sage.calculus.functional import diff  # type: ignore
+#from sage.calculus.var import function, var  # type: ignore
+#from sage.graphs.graph import Graph  # type: ignore
+#from sage.symbolic.operators import FDerivativeOperator  # type: ignore
 from typing import Iterable, Tuple, Any, Generator, TypeAlias
 
 from sympy import *
 
-sageexpression: TypeAlias = sage.symbolic.expression.Expression
+#sageexpression: TypeAlias = sage.symbolic.expression.Expression
 
 from line_profiler import profile
 
@@ -45,6 +45,7 @@ def is_numeric(e):
 @profile
 def expr_eq(e1, e2):
     """Substitute variables by random numbers an compare output."""
+    return e1 == e2
     if is_numeric(e1):
         if is_numeric(e2):
             return e1 == e2
@@ -83,6 +84,7 @@ def expr_eq(e1, e2):
 
 @profile
 def expr_is_zero(e):
+    return e == 0
     try:
         if e.is_numeric():
             return e == 0
@@ -195,6 +197,7 @@ def compactify(*vars):
 
 @profile
 def adiff(f, context, *vars):
+    return f.diff(*vars)
     use_func_diff = any(
         "NewSymbolicFunction" in v.__class__.__name__ for v in vars)
     for op in f.operands():
