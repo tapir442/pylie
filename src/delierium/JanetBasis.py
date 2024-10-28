@@ -619,8 +619,6 @@ def complete(S, context):
     vars = list(range(len(context.independent)))
     map_old_to_new = lambda v: context.independent[vars.index(len(vars)-1-v)]
 
-#    import pdb; pdb.set_trace()
-
     while 1:
         monomials = [(_,list(reversed(_.order))) for _ in result]
         ms = tuple([_[1] for _ in monomials])
@@ -648,6 +646,7 @@ def complete(S, context):
         for _m0 in m0:
             # S3: check whether in class of any of the monomials
             for entry in multiplier_collection:
+                # XXX debug!
                 if all(map(lambda x: _m0[0][x] >= entry.monom[x], entry.multipliers)) and \
                    all(map(lambda x: _m0[0][x] == entry.monom[x], entry.nonmultipliers)):
                     # this is in _m0's class
@@ -659,10 +658,10 @@ def complete(S, context):
                 pass
         if not m0:
             return list(result)
-        else:
-            for _m0 in m0:
-                dp = _m0[2].diff(map_old_to_new(_m0[1]))
-                result.add(dp)
+        for _m0 in m0:
+            # differentiate by nonmultiplier
+            dp = _m0[2].diff(map_old_to_new(_m0[1]))
+            result.add(dp)
         result = set(Reorder(list(result), context, ascending=False))
 
 
@@ -863,8 +862,8 @@ class Janet_Basis:
 #            self.show(rich=False, short=True)
 
             self.S = Autoreduce(self.S, context)
-#            print("after autoreduce")
-#            self.show(rich=False, short=True)
+            print("after autoreduce")
+            self.show(rich=False, short=True)
             self.S = CompleteSystem(self.S, context)
 #            print("after complete system")
 #            self.show(rich=False, short=True)

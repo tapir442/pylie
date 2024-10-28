@@ -14,6 +14,7 @@ from typing import Iterable, Tuple, Any, Generator, TypeAlias
 from sympy import *
 from sympy.logic.boolalg import BooleanTrue, BooleanFalse
 from sympy.core.relational import Equality
+from sympy.core.numbers import Integer, Rational
 from sympy import ordered
 
 from line_profiler import profile
@@ -27,7 +28,7 @@ def eq(d1, d2):
 
 @profile
 def is_numeric(e):
-    return isinstance(e, (int, float, complex)) and not isinstance(e, bool)
+    return type(e) in (Integer, Rational, int, float, complex)
 
 
 
@@ -36,13 +37,28 @@ def expr_eq(e1, e2):
     # '==' is structural equality
     if e1 == e2:
         return True
-    # a sum and a product can't be equal
-    if type(e1) != type(e2) and type(e1) in [Add, Mul] and type(e2) in [Add, Mul]:
+    if e1 != e2:
         return False
+    # a sum and a product can't be equal
+    if type(e1) != type(e2) and (type(e1) in [Add, Mul] or type(e2) in [Add, Mul]):
+        return False
+
     if is_numeric(e1) and is_numeric(e2):
         return e1 == e2
-    # ToDo: myby need to be more  granular
-    return False
+    if not is_numeric(e1) and is_numeric(e2):
+        return False
+    if not is_numeric(e2) and is_numeric(e1):
+        return False
+    if e1.free_symbols != e2.free_symbols:
+        return False
+    for i in e1.free_symbols:
+        r = random.randint(10, 50)
+        e1 = e1.subs(i, r)
+        e2 = e2.subs(i, r)
+        res = e1 == e2
+        if type(res) == bool:
+            return res
+    raise NotImplementedError(f"this kind of comparison is not implemented yet {e1=}, {e2=}")
 
 #    result = Eq(e1, e2)
 #    if isinstance(result, BooleanTrue):
