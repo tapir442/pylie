@@ -1,11 +1,5 @@
-"""matrix_order"""
+"""Matrix_Order"""
 
-#from sage.matrix.constructor import identity_matrix  # pylint: disable=E0611
-#from sage.matrix.constructor import matrix  # pylint: disable=E0611
-#from sage.calculus.var import var  # pylint: disable=W0611,E0611
-#from sage.calculus.var import function  # pylint: disable=W0611,E0611
-#from sage.calculus.functional import diff  # pylint: disable=W0611
-#from sage.modules.free_module_element import vector  # pylint: disable=E0611
 
 from delierium.helpers import is_derivative, is_function
 

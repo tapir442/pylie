@@ -6,31 +6,20 @@ import re
 from functools import cache
 
 import more_itertools
-#import sage.all  # type: ignore
-#import sage.symbolic.operators  # type: ignore
 from anytree import Node, PreOrderIter, RenderTree  # type: ignore
 from IPython.core.debugger import set_trace  # type: ignore
 
-#from sage.calculus.functional import diff  # type: ignore
-#from sage.calculus.var import function, var  # type: ignore
-#from sage.graphs.graph import Graph  # type: ignore
-#from sage.symbolic.operators import FDerivativeOperator  # type: ignore
 from typing import Iterable, Tuple, Any, Generator, TypeAlias
 
 from sympy import *
-
-#sageexpression: TypeAlias = sage.symbolic.expression.Expression
+from sympy.logic.boolalg import BooleanTrue, BooleanFalse
+from sympy.core.relational import Equality
+from sympy import ordered
 
 from line_profiler import profile
 
 @profile
 def eq(d1, d2):
-    """This cheap trick gives as a lot of performance gain (> 80%!)
-    because maxima comparisons are expensive,and we can expect
-    a lot of the same comparisons over and over again.
-    All other caching is neglegible compared to this here
-    70 % of the time is spent here!
-    """
     if d1.__class__ != d2.__class__:
         return False
     return d1 == d2
@@ -41,46 +30,39 @@ def is_numeric(e):
     return isinstance(e, (int, float, complex)) and not isinstance(e, bool)
 
 
-@cache
+
 @profile
 def expr_eq(e1, e2):
-    """Substitute variables by random numbers an compare output."""
-    return e1 == e2
-    if is_numeric(e1):
-        if is_numeric(e2):
-            return e1 == e2
-        else:
-            return False
-    else:
-        if is_numeric(e2):
-            return False
-    l1 = e1.variables()
-    l2 = e2.variables()
-    if l1 != l2:
+    # '==' is structural equality
+    if e1 == e2:
+        return True
+    # a sum and a product can't be equal
+    if type(e1) != type(e2) and type(e1) in [Add, Mul] and type(e2) in [Add, Mul]:
         return False
-    l = list(set(l1+l2))
-    substituted = False
-    rlist = [random.uniform(1,2) for i in range(len(l))]
-    r = dict(zip(l, rlist))
-    print(f"{e1=}")
-    print(f"{e2=}")
-    print(f"{locals()=}")
-    try:
-        ev1 = e1.subs(r)
-        substituted = True
-    except AttributeError:
-        ev1 = e1
-    try:
-        ev2 = e2.subs(r)
-        substituted = True
-    except AttributeError:
-        ev2 = e2
-    try:
-        # we can compare numbers
-        if substituted:
-            return ev1.n() == ev2.n()
-    except Exception:
-        return bool(ev1 == ev2)
+    if is_numeric(e1) and is_numeric(e2):
+        return e1 == e2
+    # ToDo: myby need to be more  granular
+    return False
+
+#    result = Eq(e1, e2)
+#    if isinstance(result, BooleanTrue):
+#        return True
+#    if isinstance(result, BooleanFalse):
+#        return False
+#    if isinstance(result, Equality):
+#        if e1.__class__ in (Add, Mul) and e2.__class__ in (Add, Mul):
+#            if e1.__class__ != e2.__class__:
+#                return False
+#            e = (e1 - e2).expand()
+#            return e == 0
+#        else:
+#            e = (e1 - e2).expand()
+#            if e == 0:
+#                return True
+#            else:
+#                return False
+#    raise NotImplementedError(f"{e1=}, {e2=}")
+
 
 @profile
 def expr_is_zero(e):
@@ -194,12 +176,14 @@ def compactify(*vars):
             result.append(pair[0])
     return result
 
+from sympy import Function
+
 
 @profile
 def adiff(f, context, *vars):
     return f.diff(*vars)
-    use_func_diff = any(
-        "NewSymbolicFunction" in v.__class__.__name__ for v in vars)
+
+    use_func_diff = any(type(v) == Function for v in vars)
     for op in f.operands():
         if "NewSymbolicFunction" in op.operator().__class__.__name__:
             use_func_diff = True

@@ -103,6 +103,21 @@ class _Dterm:
     def is_zero(self):
         return expr_is_zero(self.coeff)
 
+    def __sub__(self, other):
+        if self.comparison_vector != other.comparison_vector:
+            raise ValueError
+        return self.__class__(coeff = self.coeff - other.coeff,
+                              derivative = self.derivative,
+                              context = self.context)
+
+    def __add__(self, other):
+        if self.comparison_vector != other.comparison_vector:
+            raise ValueError
+        return self.__class__(coeff = self.coeff + other.coeff,
+                              derivative = self.derivative,
+                              context = self.context)
+
+
 
     def is_coefficient(self):
         # XXX nonsense
@@ -180,7 +195,9 @@ class _Dterm:
     _latex_ = latex
 
     def add_coefficient(self, c):
-        pass
+        return _Dterm(coeff = self.coeff + c,
+                      derivative = self.derivative,
+                      context = self.context)
 
     @profile
     def diff(self, *variables):
@@ -232,32 +249,9 @@ class _Differential_Polynomial:
         self.normalize()
 
     @profile
-    def _analyze(self, term):
-        operands = term.as_ordered_factors()
-        coeffs = []
-        d = []
-        for operand in operands:
-            if is_function(operand):
-                if self.context.is_ctxfunc(operand.func):
-                    d.append(operand)
-                else:
-                    coeffs.append(operand)
-            elif is_derivative(operand):
-                if self.context.is_ctxfunc(operand.args[0].func):
-                    d.append(operand)
-                else:
-                    coeffs.append(operand)
-            else:
-                coeffs.append(operand)
-
-        coeffs = functools.reduce(mul, coeffs, 1)
-#        print(f"{locals()=}")
-        return str(d[0]), d[0], coeffs
-
-    @profile
     def _init(self, e):
         operands = Add.make_args(e)
-        r = [self._analyze(o) for o in operands]
+        r = [analyze_term(self.context, o) for o in operands]
         dterms = {}
         for _r in r:
             dterms.setdefault(_r[0], []).append((_r[1], _r[2]))
@@ -402,6 +396,27 @@ class _Differential_Polynomial:
 
     _cache_key = __hash__
 
+def analyze_term(context, term):
+    operands = term.as_ordered_factors()
+    coeffs = []
+    d = []
+    for operand in operands:
+        if is_function(operand):
+            if context.is_ctxfunc(operand.func):
+                d.append(operand)
+            else:
+                coeffs.append(operand)
+        elif is_derivative(operand):
+            if context.is_ctxfunc(operand.args[0].func):
+                d.append(operand)
+            else:
+                coeffs.append(operand)
+        else:
+            coeffs.append(operand)
+
+    coeffs = functools.reduce(mul, coeffs, 1)
+    return str(d[0]), d[0], coeffs
+
 # ToDo: Janet_Basis as class as this object has properties like rank, order ...
 
 
@@ -437,9 +452,6 @@ def _order(der, context):
 
 
 def _reduce_inner(e1, e2, context):
-#    print(f"{e1=}")
-#    print(f"{e2=}")
-#    import pdb; pdb.set_trace()
     for t in (_ for _ in e1.p if _.function == e2.function):
         c = t.coeff
         dif = [a - b for a, b in zip(t.order, e2.order)]
@@ -605,28 +617,30 @@ def vec_multipliers(m, M, Vars):
             mult.append(v)
     return mult, list(sorted(set(Vars) - set(mult)))
 
+coll = namedtuple('coll', ['monom', 'dp', 'multipliers', 'nonmultipliers'])
+
 @profile
 def complete(S, context):
     result = list(S)
     if len(result) == 1:
         return result
     vars = list(range(len(context.independent)))
-    # return context.independent[vars.index(len(vars)-1-v)]
-    map_old_to_new = lambda v: context.independent[vars.index(v)]
+    map_old_to_new = lambda v: context.independent[vars.index(len(vars)-1-v)]
+
+#    import pdb; pdb.set_trace()
 
     while 1:
         monomials = [(_,list(reversed(_.order))) for _ in result]
         ms = tuple([_[1] for _ in monomials])
         m0 = []
 
-        coll = namedtuple('coll', ['monom', 'dp', 'multipliers', 'nonmultipliers'])
         # multiplier-collection is our M
         multiplier_collection = []
         for dp, monom in monomials:
             # S1
             _multipliers, _nonmultipliers = vec_multipliers(monom, ms, vars)
             multiplier_collection.append(
-                coll(monom, dp, _multipliers, _nonmultipliers))
+                coll(monom, dp,_multipliers, _nonmultipliers))
         for entry in multiplier_collection:
             if not entry.nonmultipliers:
                 m0.append((entry.monom, None, entry.dp))
@@ -637,6 +651,7 @@ def complete(S, context):
                     _m0 = list(entry.monom)
                     _m0[n] += 1
                     m0.append((_m0, n, entry.dp))
+
         to_remove = []
         for _m0 in m0:
             # S3: check whether in class of any of the monomials
@@ -716,10 +731,7 @@ def CompleteSystem(S, context):
 def split_by_function(S, context):
     s = bucket(S, key=lambda d: d.Lfunc())
     murksi=[FindIntegrableConditions(s[k], context) for k in s]
-#    print("CCCCCCCCCCCCCCCCCCCCCCCCCCC")
-#    print(murksi)
     return flatten(murksi)
-#    return flatten([FindIntegrableConditions(s[k], context) for k in s])
 
 @profile
 def FindIntegrableConditions(S, context):
@@ -735,19 +747,17 @@ def FindIntegrableConditions(S, context):
 
     ms = tuple([_[1] for _ in monomials])
 
-        # this is the crucial part of all af this algorithm: Think about it again
     map_old_to_new = lambda i: context.independent[vars.index(len(vars)-1-i)]
 
-    coll = namedtuple('coll', ['monom', 'dp', 'multipliers', 'nonmultipliers'])
     # multiplier-collection is our M
     multiplier_collection = []
     for dp, monom in monomials:
         # S1
-        # damned! Variables are messed up!
         _multipliers, _nonmultipliers = vec_multipliers(monom, ms, vars)
         multiplier_collection.append(
             coll(monom, dp, [map_old_to_new(_) for _ in _multipliers], [map_old_to_new(_) for _ in _nonmultipliers]))
 
+#    import pdb; pdb.set_trace()
 
     result = []
     for e1, e2 in pairs_exclude_diagonal(multiplier_collection):
@@ -863,18 +873,19 @@ class Janet_Basis:
 #            self.show(rich=False, short=True)
 
             self.S = Autoreduce(self.S, context)
-            print("after autoreduce")
-            self.show(rich=False, short=True)
+#            print("after autoreduce")
+#            self.show(rich=False, short=True)
             self.S = CompleteSystem(self.S, context)
 #            print("after complete system")
 #            self.show(rich=False, short=True)
+
             conditions = list(split_by_function(self.S, context))
 #            print("after conditions")
 #            print(conditions)
 #            import pdb; pdb.set_trace()
             reduced = [reduceS(_m, self.S, context) for _m in conditions]
             reduced = [_ for _ in reduced if _]
-#            print("after reduced", reduced)
+            #            print("after reduced", reduced)
             if not reduced:
                 self.S = Reorder(self.S, context)
                 return
