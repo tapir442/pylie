@@ -10,15 +10,9 @@ from dataclasses import dataclass
 from itertools import groupby, islice
 from operator import mul
 
-#import sage.all
 from IPython.core.debugger import set_trace
 from IPython.display import Math
 from more_itertools import bucket, flatten, powerset
-#from sage.calculus.functional import diff
-#from sage.calculus.var import function  # pylint: disable=no-name-in-module
-#from sage.calculus.var import var
-#from sage.structure.sage_object import \
-#    SageObject  # pylint: disable=no-name-in-module
 
 from delierium.exception import DelieriumNotALinearPDE
 from delierium.helpers import (_adiff, adiff, eq, expr_eq, expr_is_zero, is_derivative,
@@ -26,8 +20,6 @@ from delierium.helpers import (_adiff, adiff, eq, expr_eq, expr_is_zero, is_deri
 from delierium.Involution import My_Multiplier
 from delierium.matrix_order import Context, Mgrevlex, Mgrlex
 from delierium.typedefs import *
-
-#Sage_Expression = sage.symbolic.expression.Expression
 
 from collections.abc import Callable, Iterator
 from typing import ClassVar, Optional, Union
@@ -621,9 +613,9 @@ coll = namedtuple('coll', ['monom', 'dp', 'multipliers', 'nonmultipliers'])
 
 @profile
 def complete(S, context):
-    result = list(S)
+    result = set(S)
     if len(result) == 1:
-        return result
+        return list(result)
     vars = list(range(len(context.independent)))
     map_old_to_new = lambda v: context.independent[vars.index(len(vars)-1-v)]
 
@@ -666,14 +658,12 @@ def complete(S, context):
             except:
                 pass
         if not m0:
-            return result
+            return list(result)
         else:
             for _m0 in m0:
-#                import pdb; pdb.set_trace()
-                dp = _m0[2].adiff(map_old_to_new(_m0[1]))
-                if dp not in result:
-                    result.append(dp)
-        result = Reorder(result, context, ascending=False)
+                dp = _m0[2].diff(map_old_to_new(_m0[1]))
+                result.add(dp)
+        result = set(Reorder(list(result), context, ascending=False))
 
 
 def CompleteSystem(S, context):
