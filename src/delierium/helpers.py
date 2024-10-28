@@ -179,9 +179,15 @@ def compactify(*vars):
 from sympy import Function
 
 
+@cache
+@profile
+def _adiff(f, *vars):
+    return f.diff(*vars)
+
 @profile
 def adiff(f, context, *vars):
-    return f.diff(*vars)
+    return _adiff(f, *tuple(vars))
+    return  f.diff(*vars)
 
     use_func_diff = any(type(v) == Function for v in vars)
     for op in f.operands():

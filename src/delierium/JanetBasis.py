@@ -21,7 +21,7 @@ from more_itertools import bucket, flatten, powerset
 #    SageObject  # pylint: disable=no-name-in-module
 
 from delierium.exception import DelieriumNotALinearPDE
-from delierium.helpers import (adiff, eq, expr_eq, expr_is_zero, is_derivative,
+from delierium.helpers import (_adiff, adiff, eq, expr_eq, expr_is_zero, is_derivative,
                                is_function, pairs_exclude_diagonal, is_numeric)
 from delierium.Involution import My_Multiplier
 from delierium.matrix_order import Context, Mgrevlex, Mgrlex
@@ -670,7 +670,7 @@ def complete(S, context):
         else:
             for _m0 in m0:
 #                import pdb; pdb.set_trace()
-                dp = _m0[2].diff(map_old_to_new(_m0[1]))
+                dp = _m0[2].adiff(map_old_to_new(_m0[1]))
                 if dp not in result:
                     result.append(dp)
         result = Reorder(result, context, ascending=False)
@@ -855,7 +855,7 @@ class Janet_Basis:
         diff(w(x, y), y) + (-1/y) * w(x, y)
         diff(w(x, y), x)
         """
-#        eq.cache_clear()
+        _adiff.cache_clear()
         context = Context(dependent, independent, sort_order)
         if not isinstance(S, Iterable):
             # XXX bad criterion
