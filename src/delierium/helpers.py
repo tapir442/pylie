@@ -14,8 +14,8 @@ from typing import Iterable, Tuple, Any, Generator, TypeAlias
 from sympy import *
 from sympy.logic.boolalg import BooleanTrue, BooleanFalse
 from sympy.core.relational import Equality
-from sympy.core.numbers import Integer, Rational
-from sympy import ordered
+from sympy.core.numbers import Integer, Rational, Zero, One
+from sympy import ordered, sympify
 
 from line_profiler import profile
 
@@ -28,15 +28,18 @@ def eq(d1, d2):
 
 @profile
 def is_numeric(e):
-    return type(e) in (Integer, Rational, int, float, complex)
-
-
+    return type(e) in (Integer, Rational, int, float, complex, Zero, One) \
+        and not type(e) == bool
 
 @profile
 def expr_eq(e1, e2):
     # '==' is structural equality
-    if e1 == e2:
-        return True
+    e1 = sympify(e1)
+    e2 = sympify(e2)
+    res = e1 == e2
+    return res
+
+    return (sympify(e1) - sympify(e2)).simplify() == 0
     if e1 != e2:
         return False
     # a sum and a product can't be equal

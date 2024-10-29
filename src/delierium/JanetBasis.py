@@ -81,8 +81,10 @@ class _Dterm:
 
     def __str__(self):
         if self.coeff == 1:
-            return f"{self.derivative}"
-        return f"({self.coeff}) * { self.derivative}"
+            result = f"{self.derivative}"
+        else:
+            result = f"({self.coeff}) * { self.derivative}"
+        return result.replace("Derivative", "D")
 
     def term(self):
         return self.coeff * self.derivative
@@ -153,16 +155,18 @@ class _Dterm:
 
         def _latex_derivative(deriv):
             if is_derivative(deriv):
-                func = deriv.function().operator().function()._latex_()
-                ps = deriv.operator().parameter_set()
-                variables = deriv.operands()
-                variables.sort()
-                sub = ",".join(map(lambda _: variables[_]._latex_(), ps))
+                func = deriv.args[0].func
+                ps = deriv.args[1:]
+#                import pdb; pdb.set_trace()
+                inter = []
+                for v in ps:
+                    inter.append(",".join((latex(v[0])*v[1])))
+                sub = ",".join(inter)
                 return f"{func}_{{{sub}}}"
-            elif hasattr(deriv, "function"):
-                return deriv.function().operator()._latex_()
+            elif is_function(deriv):
+                return latex(deriv.func)
             else:
-                return str(deriv)
+                return latex(deriv)
 
         def _latex_coeff(coeff):
             if str(coeff) in ['1', '1.0']:
@@ -171,9 +175,9 @@ class _Dterm:
                 return "-"
             # ToDo: need to be more fine granular
             if hasattr(coeff, "expand"):
-                c = coeff.expand().simplify_full()._latex_()
+                c = latex(coeff.expand().simplify())
             else:
-                c = coeff
+                c = latex(coeff)
             if hasattr(coeff, "operator") and \
                 coeff.operator() != None and \
                 ((hasattr(coeff.operator(), "__name__") and coeff.operator().__name__ == "add_vararg") or is_function(coeff.operator())):
@@ -195,22 +199,17 @@ class _Dterm:
     def diff(self, *variables):
         f = self.coeff
         g = self.derivative
-#        print(f"{f=}, {g=}, {variables=}")
         try:
             fprime = adiff(f, self.context, *variables)
         except AttributeError:
             fprime = 0
-#        print(f"{fprime=}")
         result = []
-        if not is_numeric(fprime) or (is_numeric(fprime) and fprime !=0):
-#            print("EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE")
+        if not is_numeric(fprime) or (is_numeric(fprime) and fprime != 0):
             d1 = _Dterm(coeff=fprime,
                         derivative=g,
                         context=self.context)
- #           print(f"{d1=}")
             result = [d1]
         gprime = adiff(g, self.context, *variables)
- #       print(f"{gprime=}")
         d2 = _Dterm(coeff=f,
                     derivative=gprime,
                     context=self.context)
@@ -361,14 +360,15 @@ class _Differential_Polynomial:
     def diff(self, *args):
         new_dterms = {}
         for dterm in self.p:
-#            print(f"{dterm=}, {args=}")
             _dterms = dterm.diff(*args)
             for new_dterm in _dterms:
                 if new_dterm.comparison_vector in new_dterms:
                     new_dterms[new_dterm.comparison_vector].coeff += new_dterm.coeff
                 else:
                     new_dterms[new_dterm.comparison_vector] = new_dterm
-        return self.__class__(e=0, dterms=[*new_dterms.values()], context=self.context)
+        return self.__class__(e=0,
+                              dterms=[_ for _ in new_dterms.values() if _.coeff != 0],
+                              context=self.context)
 
     def __str__(self):
         m = [self.context.independent[_] for _ in self.multipliers]
@@ -449,7 +449,9 @@ def _reduce_inner(e1, e2, context):
         dif = [a - b for a, b in zip(t.order, e2.order)]
         changed = OrderedDict([(_.comparison_vector, _) for _ in e1.p])
         subs = []
+        have_changed = False
         if all(map(lambda h: h == 0, dif)):
+            have_changed = True
             # S2 from Algorithm 2.4
             for p2 in e2.p:
                 pc = p2.coeff * c
@@ -465,6 +467,7 @@ def _reduce_inner(e1, e2, context):
                         subs.append(dt)
 
         elif all(map(lambda h: h >= 0, dif)):
+            have_changed = True
             variables_to_diff = get_diff_vars(context, dif)
             changed = OrderedDict([(_.comparison_vector, _) for _ in e1.p])
             subs = []
@@ -484,9 +487,13 @@ def _reduce_inner(e1, e2, context):
                                            context=dterm.context))
         else:
             pass
-        dterms = [_ for _ in [*changed.values()] + subs if _]
-        if dterms:
-            return _Differential_Polynomial(e=0, context=e2.context, dterms=dterms)
+        if have_changed:
+            # avoid creating a _Dterm in case of no change
+            # destroys algorith, though it should create copy of e1 which
+            # should'nt hurt, but it hurts
+            dterms = [_ for _ in [*changed.values()] + subs if _]
+            if dterms:
+                return _Differential_Polynomial(e=0, context=e2.context, dterms=dterms)
 
     return e1
 
@@ -746,32 +753,38 @@ def FindIntegrableConditions(S, context):
         multiplier_collection.append(
             coll(monom, dp, [map_old_to_new(_) for _ in _multipliers], [map_old_to_new(_) for _ in _nonmultipliers]))
 
-#    import pdb; pdb.set_trace()
 
     result = []
-    for e1, e2 in pairs_exclude_diagonal(multiplier_collection):
-        for n in e1.nonmultipliers:
-            a1 = adiff(e1.dp.Lder(), context, n)
-            for m in islice(powerset(e2.multipliers), 1, None):
-                a2 = adiff(e2.dp.Lder(), context, *m)
+    for ei, ej in pairs_exclude_diagonal(multiplier_collection):
+        for n in ei.nonmultipliers:
+            a1 = adiff(ei.dp.Lder(), context, n)
+            for m in islice(powerset(ej.multipliers), 1, None):
+                a2 = adiff(ej.dp.Lder(), context, *m)
                 if a1 == a2:
                     # integrability condition
                     # don't need leading coefficients because in DPs
                     # it is always 1
-                    d1 = e1.dp.diff(n)
-                    d2 = e2.dp.diff(*m)
-                    rrr = []
-                    first = dict([(_.comparison_vector, _) for _ in d1.p])
+                    d1 = ei.dp.diff(n)
+                    d2 = ej.dp.diff(*m)
+                    new_terms = []
+                    terms_from_first = dict([(_.comparison_vector, _) for _ in d1.p])
+                    # looks like overkill, but when coefficients get very
+                    # groebnerish it pays to keep coefficients small, at least
+                    # with maxim. Let's see how sympy behaves
                     for s in d2.p:
-                        if s.comparison_vector in first:
-                            first[s.comparison_vector].coeff -= s.coeff
+                        if s.comparison_vector in terms_from_first:
+                            terms_from_first[s.comparison_vector].coeff -= s.coeff
                         else:
-                            rrr.append(s)
-                    dterms = [_ for _ in rrr + [*first.values()] if _]
+                            new_terms.append(
+                                _Dterm(coeff = -s.coeff,
+                                       derivative = s.derivative,
+                                       context = context)
+                            )
+                    dterms = [_ for _ in new_terms + [*terms_from_first.values()] if _]
                     if dterms:
-                        result.append(_Differential_Polynomial(e=0, context=context,
+                        result.append(_Differential_Polynomial(e=0,
+                                                               context=context,
                                                                dterms=dterms))
-#    print(f"{result=}")
     return result
 
 
@@ -862,19 +875,18 @@ class Janet_Basis:
 #            self.show(rich=False, short=True)
 
             self.S = Autoreduce(self.S, context)
-            print("after autoreduce")
-            self.show(rich=False, short=True)
+#            print("after autoreduce")
+#            self.show(rich=True, short=False)
+#            import pdb; pdb.set_trace()
             self.S = CompleteSystem(self.S, context)
 #            print("after complete system")
-#            self.show(rich=False, short=True)
-
+#            self.show(rich=False, short=False)
             conditions = list(split_by_function(self.S, context))
 #            print("after conditions")
 #            print(conditions)
-#            import pdb; pdb.set_trace()
             reduced = [reduceS(_m, self.S, context) for _m in conditions]
             reduced = [_ for _ in reduced if _]
-            #            print("after reduced", reduced)
+#            print("after reduced", reduced)
             if not reduced:
                 self.S = Reorder(self.S, context)
                 return
