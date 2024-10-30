@@ -45,11 +45,7 @@ except NameError:
 def compute_comparison_vector(dependent, func, ctxcheck):
     iv = [0] * len(dependent)
     if func in dependent:
-        iv[dependent.index(func.name)] = 1
-    elif ctxcheck(func):
-        iv[dependent.index(func.name)] = 1
-    else:
-        pass
+        iv[dependent.index(func)] = 1
     return iv
 
 @profile
@@ -71,9 +67,9 @@ class _Dterm:
     def __post_init__(self):
         object.__setattr__(self, 'order', self._compute_order())
         if is_derivative(self.derivative):
-            object.__setattr__(self, 'function', self.derivative.args[0].func)
+            object.__setattr__(self, 'function', self.derivative.args[0])
         else:
-            object.__setattr__(self, 'function', self.derivative.func)
+            object.__setattr__(self, 'function', self.derivative)
         object.__setattr__(self, 'comparison_vector', self._compute_comparison_vector())
 
     @profile
@@ -161,7 +157,7 @@ class _Dterm:
 
         def _latex_derivative(deriv):
             if is_derivative(deriv):
-                func = deriv.args[0].func
+                func = deriv.args[0]
                 ps = deriv.args[1:]
 #                import pdb; pdb.set_trace()
                 inter = []
@@ -248,8 +244,17 @@ class LHDP:
 
     @profile
     def _init(self, e):
-        operands = e.make_args(e)
-        import pdb; pdb.set_trace()
+        from symengine import FunctionSymbol
+        if type(e) == FunctionSymbol:
+            operands = [e]
+        elif type(e) == Derivative:
+            operands = [e]
+        elif type(e) == Mul:
+            operands = [e]
+        elif type(e) == Symbol:
+            raise ValueError(f"{e} is no term in a LHDP")
+        else:
+            operands = e.make_args(e)
         r = [analyze_term(self.context, o) for o in operands]
         dterms = {}
         for _r in r:
@@ -407,13 +412,12 @@ def analyze_term(context, term):
             else:
                 coeffs.append(operand)
         elif is_derivative(operand):
-            if context.is_ctxfunc(operand.args[0].func()):
+            if context.is_ctxfunc(operand.args[0]):
                 d.append(operand)
             else:
                 coeffs.append(operand)
         else:
             coeffs.append(operand)
-
     coeffs = functools.reduce(mul, coeffs, 1)
     return str(d[0]), d[0], coeffs
 
@@ -893,11 +897,11 @@ class Janet_Basis:
                 return
             old = self.S[:]
             print("This is where we start")
-            self.show(rich=True, short=False)
-            import pdb; pdb.set_trace()
+            self.show(rich=False, short=False)
+#            import pdb; pdb.set_trace()
             self.S = Autoreduce(self.S, context)
             print("after autoreduce")
-            self.show(rich=True, short=False)
+            self.show(rich=False, short=False)
             self.S = CompleteSystem(self.S, context)
             print("after complete system")
             self.show(rich=False, short=False)

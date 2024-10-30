@@ -98,7 +98,7 @@ class Context:
         which means: descending
         """
         self.independent = tuple(independent)
-        self.dependent = tuple(_.name for _ in dependent)
+        self.dependent = tuple(dependent)
         self._weight = weight(self.dependent, self.independent)
 
     def gt(self, v1, v2) -> int:
@@ -118,24 +118,8 @@ class Context:
         return v1 != v2 and not self.gt(v1, v2)
 
     def is_ctxfunc(self, f):
-        """Check if 'f' is in the list of independent variables."""
-        if f.__class__ == type:
-            return False
-        if hasattr(f, "name"):
-            if f.name in self.dependent:
-                return True
-        import pdb; pdb.set_trace()
-        if f().name in self.dependent:
-            return True
-#        import pdb; pdb.set_trace()
-#        if callable(f):
-#            if f() in self.dependent:
-#                return True
-#            if f() in [sympify(_) for _ in self.dependent]:
-#                return True
-#        # symengine
-#        return f.func() in self.dependent
-        return False
+        """Check if 'f' is in the list of dependent variables."""
+        return f in self.dependent
 
 
     def order_of_derivative(self, e):
