@@ -3,14 +3,10 @@
 
 from delierium.helpers import is_derivative, is_function
 
-from functools import cache
-
-from sympy import Matrix
-from sympy import Function
 from sympy import vector
-from sympy import symbols
-from sympy import eye, zeros
 from sympy.printing.pretty import pretty
+
+from sympy.core.backend import *
 
 #
 # standard weight matrices for lex, grlex and grevlex order
@@ -102,10 +98,9 @@ class Context:
         which means: descending
         """
         self.independent = tuple(independent)
-        self.dependent = tuple(_.func for _ in dependent)
+        self.dependent = tuple(_.name for _ in dependent)
         self._weight = weight(self.dependent, self.independent)
 
-    @cache
     def gt(self, v1, v2) -> int:
         """Computes the weighted difference vector of v1 and v2
         and returns 'True' if the first nonzero entry is > 0
@@ -118,18 +113,28 @@ class Context:
 
         return _gt(self._weight, v1, v2)
 
-    @cache
     def lt(self, v1, v2):
         """Checks if v1 < v2."""
         return v1 != v2 and not self.gt(v1, v2)
 
-    @cache
     def is_ctxfunc(self, f):
-        """Check if 'f' is in the list of independnet variables."""
-        if f in self.dependent:
+        """Check if 'f' is in the list of independent variables."""
+        if f.__class__ == type:
+            return False
+        if hasattr(f, "name"):
+            if f.name in self.dependent:
+                return True
+        import pdb; pdb.set_trace()
+        if f().name in self.dependent:
             return True
-        if hasattr(f, "function") and f.function().operator() in self.dependent:
-            return True
+#        import pdb; pdb.set_trace()
+#        if callable(f):
+#            if f() in self.dependent:
+#                return True
+#            if f() in [sympify(_) for _ in self.dependent]:
+#                return True
+#        # symengine
+#        return f.func() in self.dependent
         return False
 
 
@@ -146,9 +151,9 @@ class Context:
         res = [0] * len(e.args[0].args)
         if not is_derivative(e):
             return res
-        for variable, count in e.variable_count:
+        for variable in e.variables[1:]:
             i = self.independent.index(variable)
-            res[i] = count
+            res[i] += 1#count
         return res
 
 

@@ -1,9 +1,12 @@
-
 """
 Janet Basis
 """
 
+
+
 import functools
+import os
+
 from collections import OrderedDict, namedtuple
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -26,7 +29,10 @@ from typing import ClassVar, Optional, Union
 
 from line_profiler import profile
 
+
 from sympy import *
+
+from sympy.core.backend import *
 
 
 try:
@@ -39,9 +45,9 @@ except NameError:
 def compute_comparison_vector(dependent, func, ctxcheck):
     iv = [0] * len(dependent)
     if func in dependent:
-        iv[dependent.index(func)] = 1
+        iv[dependent.index(func.name)] = 1
     elif ctxcheck(func):
-        iv[dependent.index(func)] = 1
+        iv[dependent.index(func.name)] = 1
     else:
         pass
     return iv
@@ -223,8 +229,8 @@ class _Dterm:
 
     _cache_key = __hash__
 
-class _Differential_Polynomial:
-
+class LHDP:
+    """Linear Homogenious Differential Polynomial."""
     @profile
     def __init__(self, e, context, dterms=[]):
         self.context = context
@@ -236,12 +242,14 @@ class _Differential_Polynomial:
             self.p = dterms[:]
         else:
             self._init(e.expand())
+
         self.p.sort(reverse=True)
         self.normalize()
 
     @profile
     def _init(self, e):
-        operands = Add.make_args(e)
+        operands = e.make_args(e)
+        import pdb; pdb.set_trace()
         r = [analyze_term(self.context, o) for o in operands]
         dterms = {}
         for _r in r:
@@ -389,17 +397,17 @@ class _Differential_Polynomial:
     _cache_key = __hash__
 
 def analyze_term(context, term):
-    operands = term.as_ordered_factors()
+    operands = split_into_operands(term)
     coeffs = []
     d = []
     for operand in operands:
         if is_function(operand):
-            if context.is_ctxfunc(operand.func):
+            if context.is_ctxfunc(operand):
                 d.append(operand)
             else:
                 coeffs.append(operand)
         elif is_derivative(operand):
-            if context.is_ctxfunc(operand.args[0].func):
+            if context.is_ctxfunc(operand.args[0].func()):
                 d.append(operand)
             else:
                 coeffs.append(operand)
@@ -409,6 +417,20 @@ def analyze_term(context, term):
     coeffs = functools.reduce(mul, coeffs, 1)
     return str(d[0]), d[0], coeffs
 
+
+def split_into_operands(term):
+    if is_derivative(term):
+        operands = [term]
+    elif is_function(term):
+        operands = [term]
+    else:
+        try:
+            operands = term.as_ordered_factors()
+        except AttributeError:
+            # symengine
+            operands = term.args_as_sympy()
+    return operands
+
 # ToDo: Janet_Basis as class as this object has properties like rank, order ...
 
 
@@ -416,7 +438,7 @@ def Reorder(S, context, ascending=False):
     return list(sorted(S))
 
 
-def reduceS(e: _Differential_Polynomial, S: list, context: Context) -> _Differential_Polynomial:
+def reduceS(e: LHDP, S: list, context: Context) -> LHDP:
     reducing = True
     for _ in S:
         _.show(rich=True, short=True)
@@ -493,7 +515,7 @@ def _reduce_inner(e1, e2, context):
             # should'nt hurt, but it hurts
             dterms = [_ for _ in [*changed.values()] + subs if _]
             if dterms:
-                return _Differential_Polynomial(e=0, context=e2.context, dterms=dterms)
+                return LHDP(e=0, context=e2.context, dterms=dterms)
 
     return e1
 
@@ -505,7 +527,7 @@ def get_diff_vars(context, dif):
     return variables
 
 
-def reduce(e1: _Differential_Polynomial, e2: _Differential_Polynomial, context: Context) -> _Differential_Polynomial:
+def reduce(e1: LHDP, e2: LHDP, context: Context) -> LHDP:
     while not (new_e1 := _reduce_inner(e1, e2, context)) == e1:
         e1 = new_e1
     return new_e1
@@ -684,7 +706,7 @@ def CompleteSystem(S, context):
     >>> h3=diff(w, x,     y,  z,z,z)
     >>> h4=diff(w, x,     y)
     >>> ctx=Context((w,),(x,y,z), Mgrlex)
-    >>> dps=[_Differential_Polynomial(_, ctx) for _ in [h1,h2,h3,h4]]
+    >>> dps=[LHDP(_, ctx) for _ in [h1,h2,h3,h4]]
     >>> cs = CompleteSystem(dps, ctx)
     >>> # things are sorted up
     >>> for _ in cs: print(_)
@@ -711,7 +733,7 @@ def CompleteSystem(S, context):
     >>> g5 = diff(z,x,x,x) + diff(w,y,y)*8*y**2 + diff(w,x,x)/y - diff(z,x,y)*4*y**2 - diff(z,x)*32*y-16*w
     >>> g6 = diff(z,x,x,y) - diff(z,y,y)*4*y**2 - diff(z,y)*8*y
     >>> ctx = Context((w,z),(x,y), Mgrlex)
-    >>> dps=[_Differential_Polynomial(_, ctx) for _ in [g1,g5,g6]]
+    >>> dps=[LHDP(_, ctx) for _ in [g1,g5,g6]]
     >>> cs = CompleteSystem(dps, ctx)
     >>> for _ in cs: print(_)
     diff(z(x, y), y, y) + (1/2/y) * diff(z(x, y), y)
@@ -782,7 +804,7 @@ def FindIntegrableConditions(S, context):
                             )
                     dterms = [_ for _ in new_terms + [*terms_from_first.values()] if _]
                     if dterms:
-                        result.append(_Differential_Polynomial(e=0,
+                        result.append(LHDP(e=0,
                                                                context=context,
                                                                dterms=dterms))
     return result
@@ -857,7 +879,6 @@ class Janet_Basis:
         diff(w(x, y), y) + (-1/y) * w(x, y)
         diff(w(x, y), x)
         """
-        _adiff.cache_clear()
         context = Context(dependent, independent, sort_order)
         if not isinstance(S, Iterable):
             # XXX bad criterion
@@ -865,28 +886,27 @@ class Janet_Basis:
         else:
             self.S = S[:]
         old = []
-        self.S = Reorder([_Differential_Polynomial(s, context, dterms=[]) for s in self.S], context, ascending=True)
+        self.S = Reorder([LHDP(s, context, dterms=[]) for s in self.S], context, ascending=True)
         while 1:
             if old == self.S:
                 # no change since last run
                 return
             old = self.S[:]
-#            print("This is where we start")
-#            self.show(rich=False, short=True)
-
+            print("This is where we start")
+            self.show(rich=True, short=False)
+            import pdb; pdb.set_trace()
             self.S = Autoreduce(self.S, context)
-#            print("after autoreduce")
-#            self.show(rich=True, short=False)
-#            import pdb; pdb.set_trace()
+            print("after autoreduce")
+            self.show(rich=True, short=False)
             self.S = CompleteSystem(self.S, context)
-#            print("after complete system")
-#            self.show(rich=False, short=False)
+            print("after complete system")
+            self.show(rich=False, short=False)
             conditions = list(split_by_function(self.S, context))
-#            print("after conditions")
-#            print(conditions)
+            print("after conditions")
+            print(conditions)
             reduced = [reduceS(_m, self.S, context) for _m in conditions]
             reduced = [_ for _ in reduced if _]
-#            print("after reduced", reduced)
+            print("after reduced", reduced)
             if not reduced:
                 self.S = Reorder(self.S, context)
                 return

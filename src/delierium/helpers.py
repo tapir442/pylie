@@ -12,10 +12,11 @@ from IPython.core.debugger import set_trace  # type: ignore
 from typing import Iterable, Tuple, Any, Generator, TypeAlias
 
 from sympy import *
-from sympy.logic.boolalg import BooleanTrue, BooleanFalse
 from sympy.core.relational import Equality
 from sympy.core.numbers import Integer, Rational, Zero, One
 from sympy import ordered, sympify
+
+from sympy.core.backend import *
 
 from line_profiler import profile
 
@@ -62,26 +63,6 @@ def expr_eq(e1, e2):
         if type(res) == bool:
             return res
     raise NotImplementedError(f"this kind of comparison is not implemented yet {e1=}, {e2=}")
-
-#    result = Eq(e1, e2)
-#    if isinstance(result, BooleanTrue):
-#        return True
-#    if isinstance(result, BooleanFalse):
-#        return False
-#    if isinstance(result, Equality):
-#        if e1.__class__ in (Add, Mul) and e2.__class__ in (Add, Mul):
-#            if e1.__class__ != e2.__class__:
-#                return False
-#            e = (e1 - e2).expand()
-#            return e == 0
-#        else:
-#            e = (e1 - e2).expand()
-#            if e == 0:
-#                return True
-#            else:
-#                return False
-#    raise NotImplementedError(f"{e1=}, {e2=}")
-
 
 @profile
 def expr_is_zero(e):
@@ -195,10 +176,7 @@ def compactify(*vars):
             result.append(pair[0])
     return result
 
-from sympy import Function
 
-
-@cache
 @profile
 def _adiff(f, *vars):
     return f.diff(*vars)
