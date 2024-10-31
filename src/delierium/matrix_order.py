@@ -107,8 +107,9 @@ class Context:
         diffvector = Matrix(len(v1), 1, [v1[i] - v2[i] for i in range(len(v1))])
         r = [_ for _ in self._weight @ diffvector]
         for entry in r:
-            if entry:
-                return entry > 0
+            if entry == 0:
+                continue
+            return entry > 0
         return False
 
     def lt(self, v1, v2):
