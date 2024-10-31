@@ -6,18 +6,12 @@ Created on Tue Jan 18 13:45:11 2022
 @author: tapir
 """
 # from https://ask.sagemath.org/question/7929/computing-variational-derivatives/
-import sage.all
-import sage.symbolic.operators
-from sage.calculus.var import var, function
-from sage.calculus.functional import diff
 from IPython.core.debugger import set_trace
-try:
-    from delierium.helpers import is_function
-except ImportError:
-    from helpers import is_function
+from delierium.helpers import is_function
 import functools
 from operator import mul
-from sage.matrix.constructor import Matrix
+
+from sympy.core.backend import *
 
 def is_op_du(expr_op, u):
     is_derivative = isinstance(

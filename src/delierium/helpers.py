@@ -6,7 +6,6 @@ import re
 from functools import cache
 
 import more_itertools
-from anytree import Node, PreOrderIter, RenderTree  # type: ignore
 from IPython.core.debugger import set_trace  # type: ignore
 
 from typing import Iterable, Tuple, Any, Generator, TypeAlias

@@ -135,7 +135,7 @@ class Context:
         res = [0] * len(e.args[0].args)
         if not is_derivative(e):
             return res
-        for variable in e.variables[1:]:
+        for variable in e.variables:
             i = self.independent.index(variable)
             res[i] += 1#count
         return res
