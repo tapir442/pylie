@@ -438,7 +438,7 @@ def split_into_operands(term):
 
 
 def Reorder(S, context, ascending=False):
-    return list(sorted(S))
+    return list(sorted(S, reverse = not ascending))
 
 
 def reduceS(e: LHDP, S: list, context: Context) -> LHDP:

@@ -1,12 +1,11 @@
 """Matrix_Order"""
 
 
-from delierium.helpers import is_derivative, is_function
-
-from sympy import vector
+from more_itertools import flatten
+from sympy.core.backend import *
 from sympy.printing.pretty import pretty
 
-from sympy.core.backend import *
+from delierium.helpers import is_derivative, is_function
 
 #
 # standard weight matrices for lex, grlex and grevlex order
@@ -106,7 +105,7 @@ class Context:
         and returns 'True' if the first nonzero entry is > 0
         """
         diffvector = Matrix(len(v1), 1, [v1[i] - v2[i] for i in range(len(v1))])
-        r = self._weight @ diffvector
+        r = [_ for _ in self._weight @ diffvector]
         for entry in r:
             if entry:
                 return entry > 0
