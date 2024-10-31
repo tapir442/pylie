@@ -159,7 +159,6 @@ class _Dterm:
             if is_derivative(deriv):
                 func = deriv.args[0]
                 ps = deriv.args[1:]
-#                import pdb; pdb.set_trace()
                 inter = []
                 for v in ps:
                     inter.append(",".join((latex(v[0])*v[1])))
@@ -244,7 +243,6 @@ class LHDP:
 
     @profile
     def _init(self, e):
-        import pdb; pdb.set_trace()
         from symengine import FunctionSymbol
         if type(e) == FunctionSymbol:
             operands = [e]
@@ -899,7 +897,7 @@ class Janet_Basis:
             old = self.S[:]
             print("This is where we start")
             self.show(rich=False, short=False)
-            import pdb; pdb.set_trace()
+#            import pdb; pdb.set_trace()
             self.S = Autoreduce(self.S, context)
             print("after autoreduce")
             self.show(rich=False, short=False)

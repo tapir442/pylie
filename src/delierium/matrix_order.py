@@ -105,13 +105,12 @@ class Context:
         """Computes the weighted difference vector of v1 and v2
         and returns 'True' if the first nonzero entry is > 0
         """
-        r = self._weight @ (Matrix(v1)-Matrix(v2))
+        diffvector = Matrix(len(v1), 1, [v1[i] - v2[i] for i in range(len(v1))])
+        r = self._weight @ diffvector
         for entry in r:
             if entry:
                 return entry > 0
         return False
-
-        return _gt(self._weight, v1, v2)
 
     def lt(self, v1, v2):
         """Checks if v1 < v2."""
