@@ -34,9 +34,7 @@ def is_numeric(e):
 @profile
 def expr_eq(e1, e2):
     # '==' is structural equality
-    e1 = sympify(e1)
-    e2 = sympify(e2)
-    res = e1 == e2
+    res = e1 - e2 == 0
     return res
 
     return (sympify(e1) - sympify(e2)).simplify() == 0
@@ -66,24 +64,6 @@ def expr_eq(e1, e2):
 @profile
 def expr_is_zero(e):
     return e == 0
-    try:
-        if e.is_numeric():
-            return e == 0
-    except AttributeError:
-        return e == 0
-    return False
-
-    try:
-        vars=e.variables()
-    except AttributeError:
-        return bool(e == 0)
-    rlist = [random.randint(100, 1_000) for i in range(len(vars))]
-    try:
-        ev = e.subs(dict(zip(vars, rlist)))
-    except AttributeError:
-        ev = e
-    # XXX make test twice
-    return bool(ev == 0)
 
 
 
