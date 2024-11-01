@@ -33,6 +33,7 @@ from line_profiler import profile
 from sympy import *
 
 from sympy.core.backend import *
+from symengine import FunctionSymbol
 
 
 try:
@@ -48,6 +49,7 @@ def compute_comparison_vector(dependent, func, ctxcheck):
         iv[dependent.index(func)] = 1
     return iv
 
+
 @profile
 def compute_order(derivative, independent, comp_order):
     """Computes the monomial tuple from the derivative part."""
@@ -57,7 +59,7 @@ def compute_order(derivative, independent, comp_order):
     return [0] * len(independent)
 
 
-@dataclass()
+@dataclass
 class _Dterm:
     coeff: int
     derivative: int
@@ -243,7 +245,6 @@ class LHDP:
 
     @profile
     def _init(self, e):
-        from symengine import FunctionSymbol
         if type(e) == FunctionSymbol:
             operands = [e]
         elif type(e) == Derivative:
@@ -306,10 +307,18 @@ class LHDP:
     @profile
     def normalize(self):
         if self.p:
-            if not is_numeric(self.Lcoeff()) or \
-               (is_numeric(self.Lcoeff()) and self.Lcoeff() != 1):
-                c = self.Lcoeff()
-                self.p = [_Dterm(_.coeff / c, _.derivative, self.context) for _ in self.p if not _.is_zero()]
+            intermediate = []
+            c = self.Lcoeff()
+            for _ in self.p:
+                try:
+                    new_coeff = (_.coeff / c).simplify()
+                except AttributeError:
+                    new_coeff = _.coeff/c
+                intermediate.append(_Dterm(coeff = new_coeff,
+                                               derivative = _.derivative,
+                                               context = _.context
+                                               ))
+            self.p = intermediate
         # XXX: wrong place?
         if self.p:
             self.order = self.p[0].order
@@ -469,6 +478,10 @@ def _order(der, context):
 
 
 def _reduce_inner(e1, e2, context):
+    #print("===================")
+    #print(f"{e1=}")
+    #print(f"{e2=}")
+    #import pdb; pdb.set_trace()
     for t in (_ for _ in e1.p if _.function == e2.function):
         c = t.coeff
         dif = [a - b for a, b in zip(t.order, e2.order)]
@@ -776,7 +789,9 @@ def FindIntegrableConditions(S, context):
         # S1
         _multipliers, _nonmultipliers = vec_multipliers(monom, ms, vars)
         multiplier_collection.append(
-            coll(monom, dp, [map_old_to_new(_) for _ in _multipliers], [map_old_to_new(_) for _ in _nonmultipliers]))
+            coll(monom, dp, 
+                 [map_old_to_new(_) for _ in _multipliers], 
+                 [map_old_to_new(_) for _ in _nonmultipliers]))
 
 
     result = []
@@ -808,8 +823,8 @@ def FindIntegrableConditions(S, context):
                     dterms = [_ for _ in new_terms + [*terms_from_first.values()] if _]
                     if dterms:
                         result.append(LHDP(e=0,
-                                                               context=context,
-                                                               dterms=dterms))
+                                        context=context,
+                                        dterms=dterms))
     return result
 
 
@@ -897,23 +912,23 @@ class Janet_Basis:
             old = self.S[:]
             print("This is where we start")
             self.show(rich=False, short=False)
-#            import pdb; pdb.set_trace()
+            #import pdb; pdb.set_trace()
             self.S = Autoreduce(self.S, context)
             print("after autoreduce")
-            self.show(rich=False, short=False)
+            #self.show(rich=False, short=False)
             self.S = CompleteSystem(self.S, context)
             print("after complete system")
-            self.show(rich=False, short=False)
+            #self.show(rich=False, short=False)
             conditions = list(split_by_function(self.S, context))
             print("after conditions")
-            print(conditions)
+            #print(conditions)
             reduced = [reduceS(_m, self.S, context) for _m in conditions]
             reduced = [_ for _ in reduced if _]
             print("after reduced", reduced)
             if not reduced:
                 self.S = Reorder(self.S, context)
                 return
-            self.S += [_ for _ in reduced if not (_ in self.S or eq(_.expression(), 0))]
+            self.S += [_ for _ in reduced if not (_ in self.S)]
             self.S = Reorder(self.S, context, ascending=True)
 
     def show(self, rich=True, short=False):

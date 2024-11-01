@@ -13,7 +13,7 @@ setup(
     long_description=long_description,
     long_description_content_type='text/markdown',
     setup_requires=["more-itertools"],
-    install_requires=["more-itertools", "pylatexenc", "sympy", "symengine"]
+    install_requires=["more-itertools", "pylatexenc", "sympy", "symengine"],
     python_requires = ">=3.12",
     authoremail='tapir@aon.at',
     license='MIT',
