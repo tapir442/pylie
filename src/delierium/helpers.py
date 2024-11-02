@@ -33,7 +33,6 @@ def is_numeric(e):
 
 @profile
 def expr_eq(e1, e2):
-    # '==' is structural equality
     res = e1 - e2 == 0
     return res
 

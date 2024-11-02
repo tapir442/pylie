@@ -67,6 +67,7 @@ class _Dterm:
 
     @profile
     def __post_init__(self):
+        object.__setattr__(self, 'coeff', nsimplify(self.coeff))
         object.__setattr__(self, 'order', self._compute_order())
         if is_derivative(self.derivative):
             object.__setattr__(self, 'function', self.derivative.args[0])
@@ -162,10 +163,9 @@ class _Dterm:
                 func = deriv.args[0]
                 ps = deriv.args[1:]
                 inter = []
-                for v in ps:
-                    inter.append(",".join((latex(v[0])*v[1])))
-                sub = ",".join(inter)
-                return f"{func}_{{{sub}}}"
+                sub = ",".join(map(str, ps))
+                
+                return f"{func.name}_{{{sub}}}"
             elif is_function(deriv):
                 return latex(deriv.func)
             else:
@@ -307,18 +307,17 @@ class LHDP:
     @profile
     def normalize(self):
         if self.p:
-            intermediate = []
+            intermediate = [_Dterm(coeff=Rational(1, 1),
+                                  derivative=self.p[0].derivative,
+                                   context = self.p[0].context)
+                           ]
             c = self.Lcoeff()
-            for _ in self.p:
-                try:
-                    new_coeff = (_.coeff / c).simplify()
-                except AttributeError:
-                    new_coeff = _.coeff/c
-                intermediate.append(_Dterm(coeff = new_coeff,
+            for _ in self.p[1:]:
+                intermediate.append(_Dterm(coeff =  nsimplify(_.coeff/c),
                                                derivative = _.derivative,
                                                context = _.context
                                                ))
-            self.p = intermediate
+            self.p = intermediate[:]
         # XXX: wrong place?
         if self.p:
             self.order = self.p[0].order
